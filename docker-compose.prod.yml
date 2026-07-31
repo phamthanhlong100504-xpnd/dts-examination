@@ -3,7 +3,7 @@ services:
     image: ghcr.io/phamthanhlong100504-xpnd/examination:latest
     container_name: examination
     restart: unless-stopped
-    ports: ["8082:8080"]
+    ports: ["8088:8088"]
     mem_limit: 200m
     environment:
       JAVA_TOOL_OPTIONS: "-Xms64m -Xmx128m -Xquickstart"
