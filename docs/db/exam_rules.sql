@@ -2,66 +2,97 @@
 -- Service: examination
 -- Entities mapped: ExamRule
 -- Engine: PostgreSQL
--- Mô tả: Defines the behavioral rules and settings for taking an exam. This includes
--- configurations like duration, retry policies, shuffling, and result visibility.
+-- Mô tả: Defines the complete behavior and configuration for an exam session.
 --
--- This rule set is referenced by exam_versions to control how candidates
--- interact with the exam.
+-- ExamRule controls all aspects of an exam: retry policy, time limits, navigation,
+-- question shuffling, result display, proctoring settings, and pause/resume behavior.
+-- Each ExamVersion references one ExamRule to establish the exam session behavior.
 
 CREATE TABLE exam_rules (
-    id                          UUID            NOT NULL    DEFAULT gen_random_uuid(),  -- Primary key for the exam rule
-    created_by                  UUID            NOT NULL,                               -- Reference to the identity service for the creator user
-    updated_by                  UUID            NULL,                                   -- Reference to the identity service for the last updater user. NULL if never updated.
-    title                       VARCHAR(255)    NOT NULL,                               -- Title of the exam rule configuration
-    allow_retry                 BOOLEAN         NOT NULL    DEFAULT FALSE,              -- Flag indicating if the candidate can retry the exam
-    max_retry                   INT             NOT NULL    DEFAULT 0,                  -- Maximum number of retries allowed (0 means infinite or not applicable depending on allow_retry)
-    shuffle_question            BOOLEAN         NOT NULL    DEFAULT FALSE,              -- Flag indicating if questions should be shuffled for each session
-    shuffle_option              BOOLEAN         NOT NULL    DEFAULT FALSE,              -- Flag indicating if options within a question should be shuffled
-    allow_review                BOOLEAN         NOT NULL    DEFAULT TRUE,               -- Flag indicating if the candidate can review their answers
-    allow_skip                  BOOLEAN         NOT NULL    DEFAULT TRUE,               -- Flag indicating if the candidate can skip questions
-    auto_submit                 BOOLEAN         NOT NULL    DEFAULT TRUE,               -- Flag indicating if the exam is automatically submitted when time expires
-    negative_marking            BOOLEAN         NOT NULL    DEFAULT FALSE,              -- Flag indicating if negative marking is applied for incorrect answers
-    show_result_immediately     BOOLEAN         NOT NULL    DEFAULT TRUE,               -- Flag indicating if results are shown to the candidate immediately upon submission
-    show_answer_after_submit    BOOLEAN         NOT NULL    DEFAULT TRUE,               -- Flag indicating if correct answers are revealed after submission
-    allow_resume                BOOLEAN         NOT NULL    DEFAULT FALSE,              -- Flag indicating if a candidate can resume an incomplete exam session
-    allow_pause                 BOOLEAN         NOT NULL    DEFAULT FALSE,              -- Flag indicating if a candidate can pause the exam timer
-    time_zone                   VARCHAR(100)    NULL,                                   -- Time zone applicable for the exam scheduling (if any)
-    passing_score               DECIMAL(5,2)    NULL,                                   -- Score required to pass the exam. NULL if not applicable.
-    duration_seconds            INT             NOT NULL    DEFAULT 0,                  -- Duration of the exam in seconds (0 means untimed)
-    status                      VARCHAR(30)     NOT NULL    DEFAULT 'ACTIVE',           -- Status of the rule configuration (e.g., ACTIVE, INACTIVE)
-    metadata                    JSONB           NOT NULL    DEFAULT '{}'::jsonb,        -- Extensible metadata for the exam rule
-    created_at                  TIMESTAMPTZ     NOT NULL    DEFAULT CURRENT_TIMESTAMP,  -- Timestamp when the record was created
-    updated_at                  TIMESTAMPTZ     NOT NULL    DEFAULT CURRENT_TIMESTAMP,  -- Timestamp when the record was last updated
-    deleted_at                  TIMESTAMPTZ     NULL                                    -- Soft delete timestamp. NULL means not deleted.
+    id                                  UUID            NOT NULL    DEFAULT gen_random_uuid(),  -- Primary key for the exam rule
+    created_by                          UUID            NOT NULL,                               -- Reference to the identity service for the creator user
+    updated_by                          UUID            NULL,                                   -- Reference to the identity service for the last updater user. NULL if never updated.
+    title                               VARCHAR(255)    NOT NULL,                               -- Unique title for the exam rule
+    allow_retry                         BOOLEAN         NOT NULL    DEFAULT false,              -- Whether retaking the exam is allowed
+    max_retry                           INT             NOT NULL    DEFAULT 0,                  -- Maximum number of retry attempts
+    retry_interval_seconds              INT             NOT NULL    DEFAULT 0,                  -- Minimum wait time (seconds) between retries
+    duration_seconds                    INT             NOT NULL    DEFAULT 0,                  -- Total exam duration in seconds
+    grace_period_seconds                INT             NOT NULL    DEFAULT 0,                  -- Grace period (seconds) before auto-submit after time expires
+    auto_submit                         BOOLEAN         NOT NULL    DEFAULT true,               -- Whether to automatically submit when time expires
+    navigation_mode                     VARCHAR(30)     NOT NULL    DEFAULT 'FREE',             -- Navigation mode: FREE or SEQUENTIAL
+    allow_skip                          BOOLEAN         NOT NULL    DEFAULT true,               -- Whether skipping questions is allowed
+    review_mode                         VARCHAR(30)     NOT NULL    DEFAULT 'ALL',              -- Review mode: NONE, CURRENT_SECTION, ALL
+    allow_pause                         BOOLEAN         NOT NULL    DEFAULT false,              -- Whether pausing the exam is allowed
+    max_pause_count                     INT             NOT NULL    DEFAULT 0,                  -- Maximum number of pauses allowed
+    max_pause_duration_seconds          INT             NOT NULL    DEFAULT 0,                  -- Maximum total pause duration in seconds
+    allow_resume                        BOOLEAN         NOT NULL    DEFAULT false,              -- Whether resuming a paused exam is allowed
+    resume_timeout_seconds              INT             NOT NULL    DEFAULT 0,                  -- Maximum time (seconds) allowed to resume before auto-forfeit
+    shuffle_sections                    BOOLEAN         NOT NULL    DEFAULT false,              -- Whether to shuffle section order
+    shuffle_questions_within_section    BOOLEAN         NOT NULL    DEFAULT false,              -- Whether to shuffle questions within each section
+    shuffle_questions_across_sections   BOOLEAN         NOT NULL    DEFAULT false,              -- Whether to shuffle questions across all sections
+    shuffle_options                     BOOLEAN         NOT NULL    DEFAULT false,              -- Whether to shuffle answer options for each question
+    result_release_mode                 VARCHAR(30)     NOT NULL    DEFAULT 'IMMEDIATE',        -- When to release results: IMMEDIATE, AFTER_SUBMIT, AFTER_EXAM_END, MANUAL
+    show_answer_after_submit            BOOLEAN         NOT NULL    DEFAULT true,               -- Whether to show correct answers after submission
+    show_explanation_after_submit       BOOLEAN         NOT NULL    DEFAULT false,              -- Whether to show explanations after submission
+    show_question_score_after_submit    BOOLEAN         NOT NULL    DEFAULT false,              -- Whether to show score per question after submission
+    require_fullscreen                  BOOLEAN         NOT NULL    DEFAULT false,              -- Whether fullscreen mode is required
+    prevent_tab_switch                  BOOLEAN         NOT NULL    DEFAULT false,              -- Whether tab switching is detected and restricted
+    max_tab_switch_count                INT             NOT NULL    DEFAULT 0,                  -- Maximum allowed tab switches before action is taken
+    time_zone                           VARCHAR(100)    NULL,                                   -- IANA time zone for the exam. NULL means server default.
+    status                              VARCHAR(30)     NOT NULL    DEFAULT 'ACTIVE',           -- Status of the rule: ACTIVE, INACTIVE
+    metadata                            JSONB           NOT NULL    DEFAULT '{}'::jsonb,        -- Extensible metadata for the exam rule
+    created_at                          TIMESTAMPTZ     NOT NULL    DEFAULT CURRENT_TIMESTAMP,  -- Timestamp when the record was created
+    updated_at                          TIMESTAMPTZ     NOT NULL    DEFAULT CURRENT_TIMESTAMP,  -- Timestamp when the record was last updated
+    deleted_at                          TIMESTAMPTZ     NULL                                    -- Soft delete timestamp. NULL means not deleted.
 );
 
 ALTER TABLE exam_rules
     ADD CONSTRAINT pk_exam_rules PRIMARY KEY (id),
+    ADD CONSTRAINT uq_exam_rules_title UNIQUE (title),
+    ADD CONSTRAINT ck_exam_rules_status CHECK (status IN ('ACTIVE', 'INACTIVE')),
+    ADD CONSTRAINT ck_exam_rules_navigation_mode CHECK (navigation_mode IN ('FREE', 'SEQUENTIAL')),
+    ADD CONSTRAINT ck_exam_rules_review_mode CHECK (review_mode IN ('NONE', 'CURRENT_SECTION', 'ALL')),
+    ADD CONSTRAINT ck_exam_rules_result_release_mode CHECK (result_release_mode IN ('IMMEDIATE', 'AFTER_SUBMIT', 'AFTER_EXAM_END', 'MANUAL')),
     ADD CONSTRAINT ck_exam_rules_max_retry CHECK (max_retry >= 0),
-    ADD CONSTRAINT ck_exam_rules_passing_score CHECK (passing_score >= 0),
-    ADD CONSTRAINT ck_exam_rules_duration_seconds CHECK (duration_seconds >= 0),
-    ADD CONSTRAINT ck_exam_rules_status CHECK (status IN ('ACTIVE', 'INACTIVE'));
+    ADD CONSTRAINT ck_exam_rules_retry_interval CHECK (retry_interval_seconds >= 0),
+    ADD CONSTRAINT ck_exam_rules_duration CHECK (duration_seconds >= 0),
+    ADD CONSTRAINT ck_exam_rules_grace_period CHECK (grace_period_seconds >= 0),
+    ADD CONSTRAINT ck_exam_rules_max_pause_count CHECK (max_pause_count >= 0),
+    ADD CONSTRAINT ck_exam_rules_max_pause_duration CHECK (max_pause_duration_seconds >= 0),
+    ADD CONSTRAINT ck_exam_rules_resume_timeout CHECK (resume_timeout_seconds >= 0),
+    ADD CONSTRAINT ck_exam_rules_max_tab_switch CHECK (max_tab_switch_count >= 0);
 
 COMMENT ON COLUMN exam_rules.id IS 'Primary key for the exam rule';
 COMMENT ON COLUMN exam_rules.created_by IS 'Reference to the identity service for the creator user';
 COMMENT ON COLUMN exam_rules.updated_by IS 'Reference to the identity service for the last updater user. NULL if never updated.';
-COMMENT ON COLUMN exam_rules.title IS 'Title of the exam rule configuration';
-COMMENT ON COLUMN exam_rules.allow_retry IS 'Flag indicating if the candidate can retry the exam';
-COMMENT ON COLUMN exam_rules.max_retry IS 'Maximum number of retries allowed (0 means infinite or not applicable depending on allow_retry)';
-COMMENT ON COLUMN exam_rules.shuffle_question IS 'Flag indicating if questions should be shuffled for each session';
-COMMENT ON COLUMN exam_rules.shuffle_option IS 'Flag indicating if options within a question should be shuffled';
-COMMENT ON COLUMN exam_rules.allow_review IS 'Flag indicating if the candidate can review their answers';
-COMMENT ON COLUMN exam_rules.allow_skip IS 'Flag indicating if the candidate can skip questions';
-COMMENT ON COLUMN exam_rules.auto_submit IS 'Flag indicating if the exam is automatically submitted when time expires';
-COMMENT ON COLUMN exam_rules.negative_marking IS 'Flag indicating if negative marking is applied for incorrect answers';
-COMMENT ON COLUMN exam_rules.show_result_immediately IS 'Flag indicating if results are shown to the candidate immediately upon submission';
-COMMENT ON COLUMN exam_rules.show_answer_after_submit IS 'Flag indicating if correct answers are revealed after submission';
-COMMENT ON COLUMN exam_rules.allow_resume IS 'Flag indicating if a candidate can resume an incomplete exam session';
-COMMENT ON COLUMN exam_rules.allow_pause IS 'Flag indicating if a candidate can pause the exam timer';
-COMMENT ON COLUMN exam_rules.time_zone IS 'Time zone applicable for the exam scheduling (if any)';
-COMMENT ON COLUMN exam_rules.passing_score IS 'Score required to pass the exam. NULL if not applicable.';
-COMMENT ON COLUMN exam_rules.duration_seconds IS 'Duration of the exam in seconds (0 means untimed)';
-COMMENT ON COLUMN exam_rules.status IS 'Status of the rule configuration (e.g., ACTIVE, INACTIVE)';
+COMMENT ON COLUMN exam_rules.title IS 'Unique title for the exam rule';
+COMMENT ON COLUMN exam_rules.allow_retry IS 'Whether retaking the exam is allowed';
+COMMENT ON COLUMN exam_rules.max_retry IS 'Maximum number of retry attempts';
+COMMENT ON COLUMN exam_rules.retry_interval_seconds IS 'Minimum wait time (seconds) between retries';
+COMMENT ON COLUMN exam_rules.duration_seconds IS 'Total exam duration in seconds';
+COMMENT ON COLUMN exam_rules.grace_period_seconds IS 'Grace period (seconds) before auto-submit after time expires';
+COMMENT ON COLUMN exam_rules.auto_submit IS 'Whether to automatically submit when time expires';
+COMMENT ON COLUMN exam_rules.navigation_mode IS 'Navigation mode: FREE (jump freely) or SEQUENTIAL (follow order)';
+COMMENT ON COLUMN exam_rules.allow_skip IS 'Whether skipping questions is allowed';
+COMMENT ON COLUMN exam_rules.review_mode IS 'Review mode: NONE, CURRENT_SECTION, or ALL';
+COMMENT ON COLUMN exam_rules.allow_pause IS 'Whether pausing the exam is allowed';
+COMMENT ON COLUMN exam_rules.max_pause_count IS 'Maximum number of pauses allowed';
+COMMENT ON COLUMN exam_rules.max_pause_duration_seconds IS 'Maximum total pause duration in seconds';
+COMMENT ON COLUMN exam_rules.allow_resume IS 'Whether resuming a paused exam is allowed';
+COMMENT ON COLUMN exam_rules.resume_timeout_seconds IS 'Maximum time (seconds) allowed to resume before auto-forfeit';
+COMMENT ON COLUMN exam_rules.shuffle_sections IS 'Whether to shuffle section order';
+COMMENT ON COLUMN exam_rules.shuffle_questions_within_section IS 'Whether to shuffle questions within each section';
+COMMENT ON COLUMN exam_rules.shuffle_questions_across_sections IS 'Whether to shuffle questions across all sections';
+COMMENT ON COLUMN exam_rules.shuffle_options IS 'Whether to shuffle answer options for each question';
+COMMENT ON COLUMN exam_rules.result_release_mode IS 'When to release results: IMMEDIATE, AFTER_SUBMIT, AFTER_EXAM_END, MANUAL';
+COMMENT ON COLUMN exam_rules.show_answer_after_submit IS 'Whether to show correct answers after submission';
+COMMENT ON COLUMN exam_rules.show_explanation_after_submit IS 'Whether to show explanations after submission';
+COMMENT ON COLUMN exam_rules.show_question_score_after_submit IS 'Whether to show score per question after submission';
+COMMENT ON COLUMN exam_rules.require_fullscreen IS 'Whether fullscreen mode is required';
+COMMENT ON COLUMN exam_rules.prevent_tab_switch IS 'Whether tab switching is detected and restricted';
+COMMENT ON COLUMN exam_rules.max_tab_switch_count IS 'Maximum allowed tab switches before action is taken';
+COMMENT ON COLUMN exam_rules.time_zone IS 'IANA time zone for the exam. NULL means server default.';
+COMMENT ON COLUMN exam_rules.status IS 'Status of the rule: ACTIVE or INACTIVE';
 COMMENT ON COLUMN exam_rules.metadata IS 'Extensible metadata for the exam rule';
 COMMENT ON COLUMN exam_rules.created_at IS 'Timestamp when the record was created';
 COMMENT ON COLUMN exam_rules.updated_at IS 'Timestamp when the record was last updated';
@@ -70,6 +101,10 @@ COMMENT ON COLUMN exam_rules.deleted_at IS 'Soft delete timestamp. NULL means no
 -- Index to support filtering active rules by status
 CREATE INDEX ix_exam_rules_status ON exam_rules (status) WHERE deleted_at IS NULL;
 
+-- Index to support searching by title
+CREATE INDEX ix_exam_rules_title ON exam_rules (title) WHERE deleted_at IS NULL;
+
+-- Trigger: auto-update updated_at on row modification
 CREATE TRIGGER trg_exam_rules_updated_at
     BEFORE UPDATE ON exam_rules
     FOR EACH ROW
