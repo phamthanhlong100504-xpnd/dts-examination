@@ -4,7 +4,7 @@ services:
     container_name: examination
     restart: unless-stopped
     ports: ["8088:8088"]
-    mem_limit: 200m
+    mem_limit: 250m
     environment:
       JAVA_TOOL_OPTIONS: "-Xms64m -Xmx128m -Xquickstart"
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/examination
