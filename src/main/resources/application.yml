@@ -1,6 +1,10 @@
 spring:
   application:
     name: examination
+  main:
+    lazy-initialization: true
+  jmx:
+    enabled: false
   datasource:
     url: jdbc:postgresql://103.75.182.249:5434/examination
     username: postgres
@@ -17,6 +21,9 @@ spring:
 
 server:
   port: 8080
+  tomcat:
+    threads:
+      max: 50
 
 jwt:
   # Secret key đã encode base64, dài > 256bit
