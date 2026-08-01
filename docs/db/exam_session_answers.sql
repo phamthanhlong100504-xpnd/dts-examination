@@ -28,6 +28,7 @@ CREATE TABLE exam_session_answers (
     is_correct BOOLEAN,    -- Kết quả chấm điểm: TRUE (đúng), FALSE (sai), NULL (chưa được chấm điểm).
     score NUMERIC(5,2),    -- Điểm số đạt được của câu trả lời. NULL nếu chưa được chấm điểm.
     answered_at TIMESTAMPTZ NOT NULL,    -- Thời điểm thí sinh thực hiện trả lời câu hỏi này
+    version INT NOT NULL DEFAULT 0,    -- Optimistic locking để tránh race condition khi cập nhật câu trả lời
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,    -- Thời điểm tạo bản ghi lần đầu
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP    -- Thời điểm cập nhật bản ghi lần cuối
 );
@@ -46,6 +47,7 @@ COMMENT ON COLUMN exam_session_answers.display_snapshot IS 'Snapshot lưu trạn
 COMMENT ON COLUMN exam_session_answers.is_correct IS 'Kết quả chấm điểm: TRUE (đúng), FALSE (sai), NULL (chưa được chấm điểm).';
 COMMENT ON COLUMN exam_session_answers.score IS 'Điểm số đạt được của câu trả lời. NULL nếu chưa được chấm điểm.';
 COMMENT ON COLUMN exam_session_answers.answered_at IS 'Thời điểm thí sinh thực hiện trả lời câu hỏi này';
+COMMENT ON COLUMN exam_session_answers.version IS 'Version dùng cho Optimistic Locking, ngăn chặn race condition khi cập nhật câu trả lời';
 COMMENT ON COLUMN exam_session_answers.created_at IS 'Thời điểm tạo bản ghi lần đầu';
 COMMENT ON COLUMN exam_session_answers.updated_at IS 'Thời điểm cập nhật bản ghi lần cuối';
 

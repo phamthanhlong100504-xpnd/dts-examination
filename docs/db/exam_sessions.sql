@@ -24,6 +24,8 @@ CREATE TABLE exam_sessions (
     expired_at          TIMESTAMPTZ     NULL,                                   -- Timestamp when the session is forcefully expired (due to time limit)
     status              VARCHAR(30)     NOT NULL    DEFAULT 'READY',            -- Status of the session (e.g., READY, IN_PROGRESS, SUBMITTED, EXPIRED, CANCELLED)
     metadata            JSONB           NOT NULL    DEFAULT '{}'::jsonb,        -- Extensible metadata for the exam session
+    idempotency_key     VARCHAR(100)    NULL,                                   -- Key chống double-submit khi nộp bài
+    version             INT             NOT NULL    DEFAULT 0,                  -- Optimistic locking để tránh race condition
     created_at          TIMESTAMPTZ     NOT NULL    DEFAULT CURRENT_TIMESTAMP,  -- Timestamp when the record was created
     updated_at          TIMESTAMPTZ     NOT NULL    DEFAULT CURRENT_TIMESTAMP,  -- Timestamp when the record was last updated
     deleted_at          TIMESTAMPTZ     NULL                                    -- Soft delete timestamp. NULL means not deleted.
@@ -52,6 +54,8 @@ COMMENT ON COLUMN exam_sessions.submitted_at IS 'Timestamp when the candidate su
 COMMENT ON COLUMN exam_sessions.expired_at IS 'Timestamp when the session is forcefully expired (due to time limit)';
 COMMENT ON COLUMN exam_sessions.status IS 'Status of the session (e.g., READY, IN_PROGRESS, SUBMITTED, EXPIRED, CANCELLED)';
 COMMENT ON COLUMN exam_sessions.metadata IS 'Extensible metadata for the exam session';
+COMMENT ON COLUMN exam_sessions.idempotency_key IS 'Khóa chống trùng lặp (idempotency key) dùng khi nộp bài để tránh double-submit do network retry';
+COMMENT ON COLUMN exam_sessions.version IS 'Version dùng cho Optimistic Locking, ngăn chặn race condition khi nhiều thiết bị cùng submit';
 COMMENT ON COLUMN exam_sessions.created_at IS 'Timestamp when the record was created';
 COMMENT ON COLUMN exam_sessions.updated_at IS 'Timestamp when the record was last updated';
 COMMENT ON COLUMN exam_sessions.deleted_at IS 'Soft delete timestamp. NULL means not deleted.';
@@ -67,6 +71,9 @@ CREATE INDEX ix_exam_sessions_status ON exam_sessions (status) WHERE deleted_at 
 
 -- Unique index to quickly look up a session by its secure token
 CREATE UNIQUE INDEX uq_exam_sessions_session_token ON exam_sessions (session_token);
+
+-- Unique index to enforce idempotency constraints for submission
+CREATE UNIQUE INDEX uq_exam_sessions_idempotency_key ON exam_sessions (idempotency_key) WHERE idempotency_key IS NOT NULL;
 
 CREATE TRIGGER trg_exam_sessions_updated_at
     BEFORE UPDATE ON exam_sessions
