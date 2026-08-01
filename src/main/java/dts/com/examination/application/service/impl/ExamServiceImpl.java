@@ -24,6 +24,7 @@ import java.util.UUID;
 public class ExamServiceImpl implements ExamService {
 
     private final ExamRepository examRepository;
+    private final dts.com.examination.domain.repository.ExamVersionRepository examVersionRepository;
 
     @Override
     @Transactional
@@ -90,8 +91,9 @@ public class ExamServiceImpl implements ExamService {
     public void delete(UUID examId) {
         Exam exam = getExamOrThrow(examId);
         
-        // TODO: Check if there are any child ExamVersion records in PUBLISHED state. Throw BusinessRuleException if found.
-        // examVersionRepository.existsByExamIdAndStatus(examId, "PUBLISHED") -> throw new BusinessRuleException(...)
+        if (examVersionRepository.existsByExamIdAndStatusAndDeletedAtIsNull(examId, "PUBLISHED")) {
+            throw new BusinessRuleException("Cannot delete exam because it has PUBLISHED versions.");
+        }
 
         exam.setDeletedAt(Instant.now());
         examRepository.save(exam);

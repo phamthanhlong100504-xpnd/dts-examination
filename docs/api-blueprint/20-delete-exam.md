@@ -67,7 +67,7 @@ None
 1. **Permission Validation**: Verify the user has `exam:delete` permission.
 2. **Business Validation**: 
    - Fetch target exam. Throw 404 Not Found if missing or already deleted.
-   - Check if there are any child `ExamVersion` records in `PUBLISHED` state. Throw 409 Conflict if found. *(Note: Implementation marked as TODO until `ExamVersion` is fully implemented)*.
+   - Check if there are any child `ExamVersion` records in `PUBLISHED` state. Throw 409 Conflict if found.
 3. **Transaction Boundary**: Start database transaction.
 4. **Business Workflow**:
    - Set `deleted_at` to current timestamp.
