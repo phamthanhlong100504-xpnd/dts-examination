@@ -1,0 +1,1480 @@
+# exam-session-runtime.md
+
+# Examination Service – Exam Session Runtime API Blueprint
+
+## Mục tiêu
+
+Quản lý toàn bộ vòng đời làm bài của người học (`ExamSession`) và dữ liệu trả lời của thí sinh (`ExamSessionAnswer`).
+
+Examination Service là **source of truth của bài làm**. Mọi dữ liệu liên quan đến một lần thi (session, thứ tự hiển thị của câu hỏi, đáp án đã chọn, kết quả chấm từng câu) đều được lưu tại service này.
+
+Service này **không chịu trách nhiệm lưu kết quả học tập lâu dài hoặc thống kê tổng hợp**. Các dữ liệu đó sẽ được xử lý bởi Result Service trong giai đoạn sau.
+
+---
+
+# Domain
+
+## Aggregate
+
+`ExamSession`
+
+`ExamSession` là aggregate root của runtime domain.
+
+Một `ExamSession` đại diện cho **một lần làm bài của một người dùng trên một phiên bản đề thi (`ExamVersion`)**.
+
+Mỗi session có nhiều `ExamSessionAnswer`.
+
+Quan hệ:
+
+```text
+ExamSession (1)
+        |
+        | 1 - N
+        |
+ExamSessionAnswer (N)
+```
+
+---
+
+# Entity
+
+## exam_sessions
+
+### Vai trò
+
+Đại diện cho một phiên làm bài của người dùng.
+
+### Bảng
+
+`exam_sessions`
+
+### Các trường chính
+
+| Field            | Type      | Description             |
+| ---------------- | --------- | ----------------------- |
+| id               | UUID      | Session ID              |
+| exam_version_id  | UUID      | Phiên bản đề thi        |
+| user_id          | UUID      | Người làm bài           |
+| attempt_no       | INT       | Lần làm thứ mấy         |
+| status           | ENUM      | Trạng thái session      |
+| started_at       | TIMESTAMP | Thời điểm bắt đầu       |
+| submitted_at     | TIMESTAMP | Thời điểm nộp bài       |
+| expired_at       | TIMESTAMP | Thời điểm hết hạn       |
+| duration_seconds | INT       | Thời lượng của đề       |
+| session_token    | VARCHAR   | Token runtime           |
+| client_info      | JSONB     | Thông tin thiết bị / IP |
+| created_at       | TIMESTAMP | Audit                   |
+| updated_at       | TIMESTAMP | Audit                   |
+
+### Status
+
+| Status      | Ý nghĩa                    |
+| ----------- | -------------------------- |
+| READY       | Đã tạo nhưng đang tạm dừng |
+| IN_PROGRESS | Đang làm bài               |
+| SUBMITTED   | Đã nộp bài                 |
+| EXPIRED     | Hết thời gian              |
+| CANCELLED   | Bị hủy                     |
+
+---
+
+## exam_session_answers
+
+### Vai trò
+
+Lưu **snapshot của từng câu hỏi trong session** và đáp án mà người dùng đã chọn.
+
+Mỗi câu hỏi trong đề sẽ có đúng một bản ghi trong bảng này.
+
+### Bảng
+
+`exam_session_answers`
+
+### Các trường chính
+
+| Field            | Type      | Description                   |
+| ---------------- | --------- | ----------------------------- |
+| id               | UUID      | Answer ID                     |
+| exam_session_id  | UUID      | FK → exam_sessions            |
+| question_id      | UUID      | ID câu hỏi từ Question Bank   |
+| selected_answer  | JSONB     | Đáp án người dùng chọn        |
+| display_snapshot | JSONB     | Snapshot hiển thị của câu hỏi |
+| is_correct       | BOOLEAN   | Kết quả chấm                  |
+| score            | NUMERIC   | Điểm của câu                  |
+| answered_at      | TIMESTAMP | Thời điểm trả lời             |
+| created_at       | TIMESTAMP | Audit                         |
+| updated_at       | TIMESTAMP | Audit                         |
+
+### display_snapshot
+
+Lưu trạng thái hiển thị của câu hỏi trong đề.
+
+Ví dụ:
+
+```json
+{
+  "position": 5,
+  "sectionId": "TRAFFIC_SIGNS",
+  "optionOrder": ["C", "A", "D", "B"]
+}
+```
+
+Mục đích:
+
+* giữ nguyên thứ tự câu hỏi,
+* giữ nguyên thứ tự option sau khi shuffle,
+* tái tạo chính xác đề thi khi review.
+
+### selected_answer
+
+Ví dụ single choice:
+
+```json
+{
+  "type": "single_choice",
+  "optionIds": ["A"]
+}
+```
+
+Ví dụ multiple choice:
+
+```json
+{
+  "type": "multiple_choice",
+  "optionIds": ["A", "C"]
+}
+```
+
+Ví dụ text answer:
+
+```json
+{
+  "type": "text",
+  "text": "Đáp án của tôi"
+}
+```
+
+---
+
+# Runtime Lifecycle
+
+## Session lifecycle
+
+```text
+READY
+   │
+   ▼
+IN_PROGRESS
+   │
+   ├────────────► READY
+   │              (pause)
+   │
+   ├────────────► SUBMITTED
+   │
+   ├────────────► EXPIRED
+   │
+   └────────────► CANCELLED
+```
+
+### Allowed transitions
+
+| From        | To          |
+| ----------- | ----------- |
+| READY       | IN_PROGRESS |
+| IN_PROGRESS | READY       |
+| IN_PROGRESS | SUBMITTED   |
+| IN_PROGRESS | EXPIRED     |
+| READY       | CANCELLED   |
+| IN_PROGRESS | CANCELLED   |
+
+Không cho phép chuyển từ `SUBMITTED`, `EXPIRED`, `CANCELLED` sang trạng thái khác.
+
+---
+
+# Business Rules
+
+## Start Session
+
+* Chỉ được tạo từ `ExamVersion` đang `PUBLISHED`.
+* Kiểm tra thời gian hiệu lực của đề.
+* Kiểm tra số lần làm (`maxRetry`).
+* Sinh danh sách câu hỏi.
+* Áp dụng shuffle theo `ExamRule`.
+* Tạo `exam_sessions`.
+* Tạo trước toàn bộ `exam_session_answers` với `selected_answer = null`.
+
+## Save Answers
+
+* Chỉ update `selected_answer`.
+* Không insert thêm bản ghi mới.
+* Có thể gọi nhiều lần (idempotent).
+
+## Submit
+
+* Đọc toàn bộ `exam_session_answers`.
+* Lấy đáp án từ Question Bank Service.
+* Chấm từng câu.
+* Cập nhật `is_correct` và `score`.
+* Đổi trạng thái session thành `SUBMITTED`.
+
+## Get Result
+
+* Chỉ được xem khi session đã `SUBMITTED`.
+* Trả lại toàn bộ bài làm và kết quả chấm.
+
+---
+
+# Security
+
+Mọi API runtime phải đảm bảo:
+
+```text
+exam_session.user_id == current_user.id
+```
+
+Nếu không đúng:
+
+```text
+403 Forbidden
+```
+
+Có thể sử dụng:
+
+```http
+Authorization: Bearer <JWT>
+X-Session-Token: <session_token>
+```
+
+để bảo vệ session runtime.
+
+---
+
+# Ghi chú thiết kế
+
+* Không sử dụng bảng `exam_session_questions`.
+* Snapshot của đề được lưu trực tiếp trong `exam_session_answers.display_snapshot`.
+* `exam_sessions` chỉ lưu trạng thái runtime, không lưu kết quả tổng hợp.
+* `exam_session_answers` là nguồn dữ liệu chi tiết của bài làm và sẽ được dùng để tái tạo đề thi cũng như review sau khi nộp bài.
+--------
+
+stage 2
+
+# Stage 2 — Session Initialization APIs
+
+# 1. Start Exam Session
+
+## Endpoint
+
+`POST /api/v1/exam-sessions`
+
+## Mục đích
+
+Tạo một phiên làm bài mới (`exam_session`) và khởi tạo toàn bộ các bản ghi trong `exam_session_answers`.
+
+API này là điểm bắt đầu của mọi lần thi.
+
+## Request
+
+### Headers
+
+```http
+Authorization: Bearer <JWT>
+Content-Type: application/json
+```
+
+### Body
+
+```json
+{
+  "examVersionId": "9d7f6a91-64f4-4c47-97a5-18d84f9b3f10",
+  "clientInfo": {
+    "device": "Chrome 138",
+    "platform": "Windows",
+    "ip": "203.113.1.10"
+  }
+}
+```
+
+## Validate
+
+### examVersionId
+
+* Bắt buộc
+* Phải là UUID hợp lệ
+* Phải tồn tại trong `exam_versions`
+* `exam_version.status = PUBLISHED`
+
+### clientInfo
+
+* Optional
+* Nếu có phải là JSON object
+
+### Runtime validation
+
+* Người dùng đã đăng nhập
+* Đề thi đang trong thời gian hiệu lực (`started_at`, `ended_at`)
+* Chưa vượt quá số lần làm theo `ExamRule.maxRetry`
+* Không tồn tại session `IN_PROGRESS` của cùng user và cùng exam version (nếu rule không cho phép làm song song)
+
+## Luồng hoạt động
+
+1. Xác thực JWT.
+2. Load `ExamVersion`.
+3. Kiểm tra trạng thái `PUBLISHED`.
+4. Load `ExamRule`.
+5. Kiểm tra số lần làm (`maxRetry`).
+6. Sinh danh sách câu hỏi từ `content_type` và `content_id`.
+7. Áp dụng `ExamStructure`.
+8. Shuffle câu hỏi nếu `shuffleQuestion = true`.
+9. Shuffle option nếu `shuffleOption = true`.
+10. Tạo `exam_sessions`.
+11. Tạo toàn bộ `exam_session_answers`:
+
+    * question_id
+    * display_snapshot
+    * selected_answer = null
+12. Trả session.
+
+## Response
+
+### 201 Created
+
+```json
+{
+  "sessionId": "f7e1baf6-7d34-4f3b-9e93-56c1a8b1b001",
+  "examVersionId": "9d7f6a91-64f4-4c47-97a5-18d84f9b3f10",
+  "attemptNo": 2,
+  "status": "IN_PROGRESS",
+  "startedAt": "2026-08-01T08:00:00Z",
+  "expiredAt": "2026-08-01T08:20:00Z",
+  "durationSeconds": 1200
+}
+```
+
+## Business Rule
+
+* Mỗi lần gọi API sẽ tạo **một session mới**.
+* `exam_session_answers` phải được tạo **đầy đủ ngay trong transaction tạo session**.
+* Nếu quá trình tạo answer thất bại thì rollback toàn bộ session.
+* `attempt_no` = số session trước đó của user với cùng exam version + 1.
+
+## HTTP Status
+
+* 201 Created
+* 400 Bad Request
+* 401 Unauthorized
+* 403 Forbidden
+* 404 Not Found
+* 409 Conflict
+
+---
+
+# 2. Get Session Detail
+
+## Endpoint
+
+`GET /api/v1/exam-sessions/{sessionId}`
+
+## Mục đích
+
+Lấy thông tin runtime của một phiên làm bài.
+
+API này **không trả nội dung đề thi**, chỉ trả trạng thái session và tiến độ hiện tại.
+
+## Request
+
+### Headers
+
+```http
+Authorization: Bearer <JWT>
+```
+
+### Path Parameter
+
+| Parameter | Type | Description    |
+| --------- | ---- | -------------- |
+| sessionId | UUID | ID của session |
+
+## Validate
+
+### sessionId
+
+* Bắt buộc
+* UUID hợp lệ
+* Session phải tồn tại
+
+### Ownership validation
+
+* `exam_session.user_id` phải bằng user hiện tại
+
+Nếu không đúng:
+
+```http
+403 Forbidden
+```
+
+## Luồng hoạt động
+
+1. Xác thực JWT.
+2. Load `exam_sessions`.
+3. Kiểm tra ownership.
+4. Nếu status = `IN_PROGRESS`:
+
+   * Tính `remainingSeconds = expired_at - now`
+   * Nếu remainingSeconds <= 0:
+
+     * đổi status thành `EXPIRED`
+5. Đếm số câu đã trả lời từ `exam_session_answers`.
+6. Trả thông tin session.
+
+## Response
+
+### 200 OK
+
+```json
+{
+  "sessionId": "f7e1baf6-7d34-4f3b-9e93-56c1a8b1b001",
+  "examVersionId": "9d7f6a91-64f4-4c47-97a5-18d84f9b3f10",
+  "attemptNo": 2,
+  "status": "IN_PROGRESS",
+  "startedAt": "2026-08-01T08:00:00Z",
+  "expiredAt": "2026-08-01T08:20:00Z",
+  "durationSeconds": 1200,
+  "remainingSeconds": 845,
+  "answeredQuestions": 17,
+  "totalQuestions": 40
+}
+```
+
+## Business Rule
+
+* `remainingSeconds` được tính động tại thời điểm request.
+* `answeredQuestions` được tính từ `exam_session_answers.selected_answer IS NOT NULL`.
+* `totalQuestions` = số record của `exam_session_answers` thuộc session.
+* API này không trả nội dung câu hỏi và không trả đáp án đã chọn.
+
+## HTTP Status
+
+* 200 OK
+* 401 Unauthorized
+* 403 Forbidden
+* 404 Not Found
+
+-----------------
+
+stage 3
+
+# Stage 3 — Paper Delivery & Answer Persistence APIs
+
+# 3. Get Exam Paper
+
+## Endpoint
+
+`GET /api/v1/exam-sessions/{sessionId}/paper`
+
+## Mục đích
+
+Lấy đề thi của một session theo đúng **thứ tự đã được sinh** khi bắt đầu bài thi.
+
+API này luôn trả về cùng một đề cho cùng một session, kể cả khi người dùng refresh trang hoặc resume session.
+
+## Request
+
+### Headers
+
+```http
+Authorization: Bearer <JWT>
+```
+
+### Path Parameter
+
+| Parameter | Type | Description    |
+| --------- | ---- | -------------- |
+| sessionId | UUID | ID của session |
+
+## Validate
+
+### sessionId
+
+* Bắt buộc
+* UUID hợp lệ
+* Session phải tồn tại
+
+### Ownership validation
+
+* `exam_session.user_id` phải bằng user hiện tại
+
+### Runtime validation
+
+* Session không ở trạng thái `CANCELLED`
+* Nếu `status = IN_PROGRESS` thì:
+
+  * thời gian hiện tại phải nhỏ hơn `expired_at`
+* Nếu `status = READY` thì vẫn cho phép lấy đề để resume
+* Nếu `status = SUBMITTED` thì không sử dụng API này để review bài làm (review dùng API Get Exam Result)
+
+## Luồng hoạt động
+
+1. Xác thực JWT.
+2. Load `exam_sessions`.
+3. Kiểm tra ownership.
+4. Nếu session đang `IN_PROGRESS`:
+
+   * kiểm tra timeout
+   * nếu hết thời gian:
+
+     * đổi status thành `EXPIRED`
+     * trả `409 Session Expired`
+5. Load toàn bộ `exam_session_answers`.
+6. Sắp xếp theo `display_snapshot.position`.
+7. Gọi Question Bank Service để lấy nội dung câu hỏi.
+8. Áp dụng `display_snapshot.optionOrder` để sắp xếp option.
+9. Trả đề thi.
+
+## Response
+
+### 200 OK
+
+```json
+{
+  "sessionId": "f7e1baf6-7d34-4f3b-9e93-56c1a8b1b001",
+  "status": "IN_PROGRESS",
+  "remainingSeconds": 845,
+  "questions": [
+    {
+      "questionId": "8f5a6e91-5c22-4b2d-b3e1-2f1e4c9d1001",
+      "display": {
+        "position": 1,
+        "sectionId": "TRAFFIC_SIGNS"
+      },
+      "content": "Biển báo này có ý nghĩa gì?",
+      "options": [
+        { "id": "C", "text": "Cấm rẽ trái" },
+        { "id": "A", "text": "Đi thẳng" },
+        { "id": "D", "text": "Đường một chiều" },
+        { "id": "B", "text": "Được quay đầu" }
+      ],
+      "selectedAnswer": null
+    }
+  ]
+}
+```
+
+## Business Rule
+
+* Không sinh lại thứ tự câu hỏi.
+* Không sinh lại thứ tự option.
+* `display_snapshot` là nguồn dữ liệu duy nhất để tái tạo đề.
+* `selectedAnswer` được lấy từ `exam_session_answers.selected_answer`.
+
+## HTTP Status
+
+* 200 OK
+* 401 Unauthorized
+* 403 Forbidden
+* 404 Not Found
+* 409 Conflict
+
+---
+
+# 4. Save Answers
+
+## Endpoint
+
+`POST /api/v1/exam-sessions/{sessionId}/answers`
+
+## Mục đích
+
+Lưu hoặc cập nhật đáp án của thí sinh.
+
+API này phục vụ:
+
+* autosave,
+* manual save,
+* update đáp án nhiều lần.
+
+## Request
+
+### Headers
+
+```http
+Authorization: Bearer <JWT>
+Content-Type: application/json
+```
+
+### Path Parameter
+
+| Parameter | Type | Description    |
+| --------- | ---- | -------------- |
+| sessionId | UUID | ID của session |
+
+### Body
+
+```json
+{
+  "answers": [
+    {
+      "questionId": "8f5a6e91-5c22-4b2d-b3e1-2f1e4c9d1001",
+      "selectedAnswer": {
+        "type": "single_choice",
+        "optionIds": ["A"]
+      }
+    },
+    {
+      "questionId": "7d2a6b33-6e11-44aa-8c92-5b2c9d7e2002",
+      "selectedAnswer": {
+        "type": "multiple_choice",
+        "optionIds": ["B", "D"]
+      }
+    }
+  ]
+}
+```
+
+## Validate
+
+### sessionId
+
+* Bắt buộc
+* UUID hợp lệ
+* Session phải tồn tại
+
+### Ownership validation
+
+* `exam_session.user_id` phải bằng user hiện tại
+
+### Runtime validation
+
+* `status = IN_PROGRESS`
+* Chưa hết thời gian
+
+### answers
+
+* Bắt buộc
+* Không được rỗng
+* Mỗi `questionId` phải thuộc session
+* `selectedAnswer.type` phải hợp lệ
+* Cấu trúc `selectedAnswer` phải đúng theo loại câu hỏi
+
+## Luồng hoạt động
+
+1. Xác thực JWT.
+2. Load `exam_sessions`.
+3. Kiểm tra ownership.
+4. Kiểm tra status.
+5. Kiểm tra timeout.
+6. Với từng answer:
+
+   * tìm record trong `exam_session_answers`,
+   * update `selected_answer`,
+   * update `answered_at = now`.
+7. Commit transaction.
+8. Trả thời điểm lưu.
+
+## Response
+
+### 200 OK
+
+```json
+{
+  "savedAt": "2026-08-01T08:06:12Z",
+  "updatedQuestions": 2
+}
+```
+
+## Business Rule
+
+* API **idempotent**.
+* Gửi cùng một đáp án nhiều lần chỉ ghi đè giá trị cũ.
+* Không tạo record mới trong `exam_session_answers`.
+* Không thực hiện chấm điểm.
+* Không cập nhật trạng thái session.
+
+## HTTP Status
+
+* 200 OK
+* 400 Bad Request
+* 401 Unauthorized
+* 403 Forbidden
+* 404 Not Found
+* 409 Conflict
+
+Một điểm tôi muốn lưu ý để chúng ta thống nhất từ sớm: Get Exam Paper không nên gọi Question Bank Service từng câu một. 
+Nên có API batch như POST /internal/questions/batch để lấy toàn bộ câu hỏi của session trong một lần gọi; nếu không, mỗi lần mở đề sẽ thành N network calls. 
+Đây là tối ưu rất đáng làm ngay từ thiết kế.
+
+
+--------------
+
+stage4
+
+# Stage 4 — Pause / Resume APIs
+
+# 5. Pause Session
+
+## Endpoint
+
+`PATCH /api/v1/exam-sessions/{sessionId}/pause`
+
+## Mục đích
+
+Tạm dừng một phiên làm bài đang diễn ra.
+
+Khi pause, hệ thống sẽ đóng băng thời gian còn lại của bài thi bằng cách cập nhật `expired_at` tương ứng với thời lượng còn lại tại thời điểm pause.
+
+## Request
+
+### Headers
+
+```http
+Authorization: Bearer <JWT>
+```
+
+### Path Parameter
+
+| Parameter | Type | Description    |
+| --------- | ---- | -------------- |
+| sessionId | UUID | ID của session |
+
+## Validate
+
+### sessionId
+
+* Bắt buộc
+* UUID hợp lệ
+* Session phải tồn tại
+
+### Ownership validation
+
+* `exam_session.user_id` phải bằng user hiện tại
+
+### Runtime validation
+
+* `status = IN_PROGRESS`
+* `ExamRule.allowPause = true`
+* `ExamRule.allowResume = true`
+* Chưa hết thời gian (`now < expired_at`)
+
+## Luồng hoạt động
+
+1. Xác thực JWT.
+2. Load `exam_sessions`.
+3. Kiểm tra ownership.
+4. Load `ExamRule`.
+5. Kiểm tra `allowPause`.
+6. Tính `remainingSeconds = expired_at - now`.
+7. Cập nhật:
+
+   * `status = READY`
+   * `expired_at = now + remainingSeconds`
+8. Commit transaction.
+9. Trả thông tin pause.
+
+## Response
+
+### 200 OK
+
+```json
+{
+  "sessionId": "f7e1baf6-7d34-4f3b-9e93-56c1a8b1b001",
+  "status": "READY",
+  "pausedAt": "2026-08-01T08:10:00Z",
+  "remainingSeconds": 600
+}
+```
+
+## Business Rule
+
+* Không thay đổi `started_at`.
+* Không thay đổi `duration_seconds`.
+* Không thay đổi `exam_session_answers`.
+* Không thực hiện chấm điểm.
+* Không được pause session đã `SUBMITTED`, `EXPIRED` hoặc `CANCELLED`.
+
+## HTTP Status
+
+* 200 OK
+* 401 Unauthorized
+* 403 Forbidden
+* 404 Not Found
+* 409 Conflict
+
+---
+
+# 6. Resume Session
+
+## Endpoint
+
+`PATCH /api/v1/exam-sessions/{sessionId}/resume`
+
+## Mục đích
+
+Tiếp tục một phiên làm bài đã được tạm dừng.
+
+## Request
+
+### Headers
+
+```http
+Authorization: Bearer <JWT>
+```
+
+### Path Parameter
+
+| Parameter | Type | Description    |
+| --------- | ---- | -------------- |
+| sessionId | UUID | ID của session |
+
+## Validate
+
+### sessionId
+
+* Bắt buộc
+* UUID hợp lệ
+* Session phải tồn tại
+
+### Ownership validation
+
+* `exam_session.user_id` phải bằng user hiện tại
+
+### Runtime validation
+
+* `status = READY`
+* `ExamRule.allowResume = true`
+
+## Luồng hoạt động
+
+1. Xác thực JWT.
+2. Load `exam_sessions`.
+3. Kiểm tra ownership.
+4. Load `ExamRule`.
+5. Kiểm tra `allowResume`.
+6. Tính `remainingSeconds` từ `expired_at - pausedAt`.
+7. Cập nhật:
+
+   * `status = IN_PROGRESS`
+   * `expired_at = now + remainingSeconds`
+8. Commit transaction.
+9. Trả thông tin resume.
+
+## Response
+
+### 200 OK
+
+```json
+{
+  "sessionId": "f7e1baf6-7d34-4f3b-9e93-56c1a8b1b001",
+  "status": "IN_PROGRESS",
+  "resumedAt": "2026-08-01T08:15:00Z",
+  "expiredAt": "2026-08-01T08:25:00Z",
+  "remainingSeconds": 600
+}
+```
+
+## Business Rule
+
+* Chỉ resume session ở trạng thái `READY`.
+* Không thay đổi `started_at`.
+* Không thay đổi `attempt_no`.
+* Không thay đổi bất kỳ dữ liệu nào trong `exam_session_answers`.
+* Sau khi resume, người dùng tiếp tục làm bài từ đúng trạng thái trước khi pause.
+
+## HTTP Status
+
+* 200 OK
+* 401 Unauthorized
+* 403 Forbidden
+* 404 Not Found
+* 409 Conflict
+
+---
+
+# Pause / Resume State Diagram
+
+```text
+IN_PROGRESS
+      |
+      | Pause
+      v
+READY
+      |
+      | Resume
+      v
+IN_PROGRESS
+```
+
+Chỉ khi `ExamRule.allowPause = true` và `ExamRule.allowResume = true` thì transition trên mới được phép thực hiện.
+
+-----
+
+stage5
+
+# Stage 5 — Submission & Result APIs
+
+# 7. Submit Exam
+
+## Endpoint
+
+`POST /api/v1/exam-sessions/{sessionId}/submit`
+
+## Mục đích
+
+Nộp bài thi và thực hiện chấm điểm cho toàn bộ câu hỏi trong session.
+
+Đây là API kết thúc vòng đời làm bài của một session.
+
+## Request
+
+### Headers
+
+```http
+Authorization: Bearer <JWT>
+```
+
+### Path Parameter
+
+| Parameter | Type | Description    |
+| --------- | ---- | -------------- |
+| sessionId | UUID | ID của session |
+
+## Validate
+
+### sessionId
+
+* Bắt buộc
+* UUID hợp lệ
+* Session phải tồn tại
+
+### Ownership validation
+
+* `exam_session.user_id` phải bằng user hiện tại
+
+### Runtime validation
+
+* `status = IN_PROGRESS`
+* Chưa submit trước đó
+* Chưa bị CANCELLED
+
+Nếu session đã `EXPIRED`:
+
+* Nếu `ExamRule.autoSubmit = true` thì hệ thống vẫn thực hiện quy trình chấm điểm.
+* Nếu `autoSubmit = false` thì trả `409 Session Expired`.
+
+## Luồng hoạt động
+
+1. Xác thực JWT.
+2. Load `exam_sessions`.
+3. Kiểm tra ownership.
+4. Kiểm tra trạng thái session.
+5. Load toàn bộ `exam_session_answers`.
+6. Gọi Question Bank Service để lấy:
+
+   * đáp án đúng,
+   * loại câu hỏi,
+   * điểm của từng câu (nếu có).
+7. Chấm từng câu:
+
+   * so sánh `selected_answer` với đáp án đúng,
+   * tính điểm,
+   * xác định `is_correct`,
+   * cập nhật `exam_session_answers`.
+8. Tổng hợp:
+
+   * totalQuestions,
+   * answeredQuestions,
+   * correctQuestions,
+   * wrongQuestions,
+   * unansweredQuestions,
+   * totalScore,
+   * result (PASS/FAIL).
+9. Cập nhật `exam_sessions`:
+
+   * `status = SUBMITTED`,
+   * `submitted_at = now`.
+10. Commit transaction.
+11. Trả kết quả bài thi.
+
+## Response
+
+### 200 OK
+
+```json
+{
+  "sessionId": "f7e1baf6-7d34-4f3b-9e93-56c1a8b1b001",
+  "status": "SUBMITTED",
+  "submittedAt": "2026-08-01T08:18:00Z",
+  "summary": {
+    "totalQuestions": 40,
+    "answeredQuestions": 40,
+    "correctQuestions": 34,
+    "wrongQuestions": 6,
+    "unansweredQuestions": 0,
+    "score": 86,
+    "result": "PASS"
+  }
+}
+```
+
+## Business Rule
+
+* Chỉ được submit **một lần**.
+* Sau khi submit:
+
+  * không được sửa đáp án,
+  * không được pause,
+  * không được resume.
+* `exam_session_answers` trở thành snapshot cuối cùng của bài làm.
+* API **không lưu kết quả tổng hợp vào `exam_sessions`**, chỉ trả kết quả cho client.
+
+## HTTP Status
+
+* 200 OK
+* 401 Unauthorized
+* 403 Forbidden
+* 404 Not Found
+* 409 Conflict
+
+---
+
+# 8. Get Exam Result
+
+## Endpoint
+
+`GET /api/v1/exam-sessions/{sessionId}/result`
+
+## Mục đích
+
+Lấy kết quả của một session đã nộp.
+
+API này dùng để:
+
+* xem kết quả ngay sau khi submit,
+* xem lại bài thi,
+* review từng câu hỏi.
+
+## Request
+
+### Headers
+
+```http
+Authorization: Bearer <JWT>
+```
+
+### Path Parameter
+
+| Parameter | Type | Description    |
+| --------- | ---- | -------------- |
+| sessionId | UUID | ID của session |
+
+## Validate
+
+### sessionId
+
+* Bắt buộc
+* UUID hợp lệ
+* Session phải tồn tại
+
+### Ownership validation
+
+* `exam_session.user_id` phải bằng user hiện tại
+
+### Runtime validation
+
+* `status = SUBMITTED`
+
+Nếu `ExamRule.showResultImmediately = false`:
+
+* API chỉ được gọi sau khi đề thi được phép công bố kết quả.
+
+## Luồng hoạt động
+
+1. Xác thực JWT.
+2. Load `exam_sessions`.
+3. Kiểm tra ownership.
+4. Kiểm tra trạng thái `SUBMITTED`.
+5. Load `ExamRule`.
+6. Kiểm tra quyền xem kết quả.
+7. Load toàn bộ `exam_session_answers`.
+8. Tính lại summary từ dữ liệu đã chấm.
+9. Trả kết quả và chi tiết bài làm.
+
+## Response
+
+### 200 OK
+
+```json
+{
+  "sessionId": "f7e1baf6-7d34-4f3b-9e93-56c1a8b1b001",
+  "status": "SUBMITTED",
+  "submittedAt": "2026-08-01T08:18:00Z",
+  "summary": {
+    "totalQuestions": 40,
+    "answeredQuestions": 40,
+    "correctQuestions": 34,
+    "wrongQuestions": 6,
+    "unansweredQuestions": 0,
+    "score": 86,
+    "result": "PASS"
+  },
+  "answers": [
+    {
+      "questionId": "8f5a6e91-5c22-4b2d-b3e1-2f1e4c9d1001",
+      "display": {
+        "position": 1,
+        "sectionId": "TRAFFIC_SIGNS"
+      },
+      "selectedAnswer": {
+        "type": "single_choice",
+        "optionIds": ["A"]
+      },
+      "isCorrect": true,
+      "score": 1
+    },
+    {
+      "questionId": "7d2a6b33-6e11-44aa-8c92-5b2c9d7e2002",
+      "display": {
+        "position": 2,
+        "sectionId": "TRAFFIC_SIGNS"
+      },
+      "selectedAnswer": {
+        "type": "multiple_choice",
+        "optionIds": ["B", "D"]
+      },
+      "isCorrect": false,
+      "score": 0
+    }
+  ]
+}
+```
+
+## Business Rule
+
+* Kết quả được tính từ `exam_session_answers`.
+* Không chấm lại bài thi.
+* Không thay đổi bất kỳ dữ liệu nào trong database.
+* `display_snapshot` được dùng để tái tạo đúng thứ tự câu hỏi và option khi review.
+
+## HTTP Status
+
+* 200 OK
+* 401 Unauthorized
+* 403 Forbidden
+* 404 Not Found
+* 409 Conflict
+---------------
+
+stage6
+# Stage 6 — Session History & Runtime Completion
+
+# 9. Get Session History Of Exam
+
+## Endpoint
+
+`GET /api/v1/exams/{examId}/sessions`
+
+## Mục đích
+
+Lấy lịch sử các lần làm bài (`ExamSession`) của **người dùng hiện tại** đối với cùng một đề thi (`Exam`).
+
+API này dùng để hiển thị:
+
+* lịch sử thi,
+* số lần làm,
+* điểm từng lần,
+* trạng thái từng session,
+* thời gian bắt đầu / kết thúc.
+
+## Request
+
+### Headers
+
+```http
+Authorization: Bearer <JWT>
+```
+
+### Path Parameter
+
+| Parameter | Type | Description |
+| --------- | ---- | ----------- |
+| examId    | UUID | ID của Exam |
+
+### Query Parameters
+
+| Parameter | Type   | Required | Description            |
+| --------- | ------ | -------- | ---------------------- |
+| page      | int    | No       | Trang                  |
+| size      | int    | No       | Kích thước trang       |
+| status    | enum   | No       | Lọc theo trạng thái    |
+| sort      | string | No       | startedAt, submittedAt |
+
+Ví dụ:
+
+```http
+GET /api/v1/exams/2c8f9a11-4b72-4b9a-8e71-1f8a9d7e9001/sessions?page=0&size=20
+```
+
+## Validate
+
+### examId
+
+* Bắt buộc
+* UUID hợp lệ
+* Exam phải tồn tại
+
+### Query validation
+
+* page >= 0
+* size <= 100
+* status thuộc enum:
+
+  * READY
+  * IN_PROGRESS
+  * SUBMITTED
+  * EXPIRED
+  * CANCELLED
+
+## Luồng hoạt động
+
+1. Xác thực JWT.
+2. Kiểm tra Exam tồn tại.
+3. Tìm toàn bộ `exam_sessions` của **current user** theo `examId`.
+4. Join `exam_versions`.
+5. Với mỗi session:
+
+   * nếu `status = SUBMITTED`
+   * tính summary từ `exam_session_answers`
+6. Sắp xếp.
+7. Phân trang.
+8. Trả danh sách.
+
+## Response
+
+### 200 OK
+
+```json
+{
+  "page": 0,
+  "size": 20,
+  "totalElements": 2,
+  "totalPages": 1,
+  "items": [
+    {
+      "sessionId": "f7e1baf6-7d34-4f3b-9e93-56c1a8b1b001",
+      "examVersionId": "9d7f6a91-64f4-4c47-97a5-18d84f9b3f10",
+      "attemptNo": 2,
+      "status": "SUBMITTED",
+      "startedAt": "2026-08-01T08:00:00Z",
+      "submittedAt": "2026-08-01T08:18:00Z",
+      "summary": {
+        "score": 90,
+        "result": "PASS",
+        "correctQuestions": 36,
+        "totalQuestions": 40
+      }
+    },
+    {
+      "sessionId": "9c2b6e11-5f33-4a7d-8d81-4e1a8f7c2002",
+      "examVersionId": "8b6e5a44-7d21-4c8e-9f73-3d2b6e1a3003",
+      "attemptNo": 1,
+      "status": "SUBMITTED",
+      "startedAt": "2026-07-28T09:00:00Z",
+      "submittedAt": "2026-07-28T09:22:00Z",
+      "summary": {
+        "score": 78,
+        "result": "FAIL",
+        "correctQuestions": 31,
+        "totalQuestions": 40
+      }
+    }
+  ]
+}
+```
+
+## Business Rule
+
+* Chỉ trả session của **người dùng hiện tại**.
+* Không trả bài làm chi tiết.
+* Summary được tính từ `exam_session_answers`.
+* Không thay đổi dữ liệu.
+
+## HTTP Status
+
+* 200 OK
+* 401 Unauthorized
+* 403 Forbidden
+* 404 Not Found
+
+---
+
+# Runtime State Transition
+
+## Session lifecycle
+
+```text
+READY
+   │
+   ▼
+IN_PROGRESS
+   │
+   ├────────────► READY
+   │              (pause)
+   │
+   ├────────────► SUBMITTED
+   │
+   ├────────────► EXPIRED
+   │
+   └────────────► CANCELLED
+```
+
+### Allowed transitions
+
+| From        | To          |
+| ----------- | ----------- |
+| READY       | IN_PROGRESS |
+| IN_PROGRESS | READY       |
+| IN_PROGRESS | SUBMITTED   |
+| IN_PROGRESS | EXPIRED     |
+| READY       | CANCELLED   |
+| IN_PROGRESS | CANCELLED   |
+
+Không cho phép chuyển từ `SUBMITTED`, `EXPIRED`, `CANCELLED` sang trạng thái khác.
+
+---
+
+# Idempotency
+
+## Save Answers
+
+* API idempotent.
+* Gửi cùng payload nhiều lần chỉ ghi đè đáp án hiện tại.
+
+## Pause
+
+* Nếu session đã `READY` thì trả `409 Conflict`.
+
+## Resume
+
+* Nếu session không ở `READY` thì trả `409 Conflict`.
+
+## Submit
+
+* Chỉ được submit **một lần**.
+* Nếu session đã `SUBMITTED` thì trả `409 Conflict`.
+
+---
+
+# Security
+
+Mọi API runtime phải đảm bảo:
+
+```text
+exam_session.user_id == current_user.id
+```
+
+Nếu không đúng:
+
+```http
+403 Forbidden
+```
+
+Có thể sử dụng:
+
+```http
+Authorization: Bearer <JWT>
+X-Session-Token: <session_token>
+```
+
+để tăng bảo mật runtime.
+
+---
+
+# Error Response
+
+## Standard Error
+
+```json
+{
+  "code": "SESSION_NOT_FOUND",
+  "message": "Exam session not found",
+  "timestamp": "2026-08-01T08:10:00Z"
+}
+```
+
+## Error Codes
+
+| Code                      | Description                 |
+| ------------------------- | --------------------------- |
+| EXAM_VERSION_NOT_FOUND    | Không tìm thấy exam version |
+| EXAM_NOT_FOUND            | Không tìm thấy exam         |
+| SESSION_NOT_FOUND         | Không tìm thấy session      |
+| SESSION_EXPIRED           | Session đã hết thời gian    |
+| SESSION_ALREADY_SUBMITTED | Session đã nộp bài          |
+| SESSION_NOT_PAUSABLE      | Không được phép pause       |
+| SESSION_NOT_RESUMABLE     | Không được phép resume      |
+| INVALID_ANSWER            | Đáp án không hợp lệ         |
+| RETRY_LIMIT_EXCEEDED      | Đã vượt quá số lần làm      |
+
+---
+
+# API Summary
+
+| API                         | Method | Endpoint                                    |
+| --------------------------- | ------ | ------------------------------------------- |
+| Start Exam Session          | POST   | `/api/v1/exam-sessions`                     |
+| Get Session Detail          | GET    | `/api/v1/exam-sessions/{sessionId}`         |
+| Get Exam Paper              | GET    | `/api/v1/exam-sessions/{sessionId}/paper`   |
+| Save Answers                | POST   | `/api/v1/exam-sessions/{sessionId}/answers` |
+| Pause Session               | PATCH  | `/api/v1/exam-sessions/{sessionId}/pause`   |
+| Resume Session              | PATCH  | `/api/v1/exam-sessions/{sessionId}/resume`  |
+| Submit Exam                 | POST   | `/api/v1/exam-sessions/{sessionId}/submit`  |
+| Get Exam Result             | GET    | `/api/v1/exam-sessions/{sessionId}/result`  |
+| Get Session History Of Exam | GET    | `/api/v1/exams/{examId}/sessions`           |
+
+---
+
+# Scope
+
+Phạm vi của `Exam Session Runtime` chỉ bao gồm:
+
+* tạo phiên làm bài,
+* lấy thông tin session,
+* lấy đề thi của session,
+* lưu đáp án,
+* pause/resume,
+* submit và chấm điểm,
+* xem kết quả của session,
+* xem lịch sử các session của cùng một exam.
+
+Không bao gồm:
+
+* lưu kết quả tổng hợp,
+* thống kê học tập,
+* leaderboard,
+* progress,
+* analytics,
+* publish event / outbox processing (sẽ được thiết kế ở tài liệu khác).
+
+
+bổ sunhg
+
+GET /api/v1/exam-sessions/{sessionId}/progress
+
+Trả:
+
+{
+  "answeredQuestions": 17,
+  "totalQuestions": 40,
+  "remainingSeconds": 845
+}
+
+Tại sao?
+
+Frontend timer sẽ poll.
+
+Không cần gọi Get Session Detail.
+
+Tách read model đẹp hơn.
+
+Không bắt buộc.
+
+Nhưng nếu có thì rất đẹ
