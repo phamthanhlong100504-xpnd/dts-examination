@@ -5,15 +5,12 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.util.UUID;
-
 @Data
-@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class InternalQuestionOptionResponse {
-    private UUID id;
-    private String content;
-    private Integer sortOrder;
-    private Boolean isCorrect;
+@Builder
+public class SessionProgressResponse {
+    private long answeredQuestions;
+    private long totalQuestions;
+    private int remainingSeconds;
 }

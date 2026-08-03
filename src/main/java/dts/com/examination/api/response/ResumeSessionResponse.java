@@ -4,16 +4,17 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
+import java.time.Instant;
 import java.util.UUID;
 
 @Data
-@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class InternalQuestionOptionResponse {
-    private UUID id;
-    private String content;
-    private Integer sortOrder;
-    private Boolean isCorrect;
+@Builder
+public class ResumeSessionResponse {
+    private UUID sessionId;
+    private String status;
+    private Instant resumedAt;
+    private Instant expiredAt;
+    private int remainingSeconds;
 }

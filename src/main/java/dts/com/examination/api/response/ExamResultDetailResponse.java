@@ -5,15 +5,18 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
+import java.util.Map;
 import java.util.UUID;
 
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class InternalQuestionOptionResponse {
-    private UUID id;
-    private String content;
-    private Integer sortOrder;
+public class ExamResultDetailResponse {
+    private UUID questionId;
+    private Map<String, Object> display;
+    private Map<String, Object> selectedAnswer;
     private Boolean isCorrect;
+    private BigDecimal score;
 }

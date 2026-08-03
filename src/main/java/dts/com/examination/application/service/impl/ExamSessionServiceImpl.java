@@ -328,4 +328,317 @@ public class ExamSessionServiceImpl implements ExamSessionService {
                 .updatedQuestions(updatedCount)
                 .build();
     }
+
+    @Override
+    @Transactional
+    public dts.com.examination.api.response.SubmitExamResponse submitExam(UUID sessionId, String idempotencyKey, UUID userId) {
+        ExamSession session = examSessionRepository.findById(sessionId)
+                .orElseThrow(() -> new BusinessRuleException("Exam session not found"));
+
+        if (!session.getUserId().equals(userId)) {
+            throw new org.springframework.security.access.AccessDeniedException("Access denied");
+        }
+
+        if (!"IN_PROGRESS".equals(session.getStatus())) {
+            throw new BusinessRuleException("Session is not in progress");
+        }
+
+        Instant now = Instant.now();
+        if (session.getExpiredAt() != null && now.isAfter(session.getExpiredAt())) {
+            session.setStatus("EXPIRED");
+            examSessionRepository.save(session);
+            throw new BusinessRuleException("Session Expired");
+        }
+
+        session.setStatus("SUBMITTED");
+        session.setSubmittedAt(now);
+        
+        List<ExamSessionAnswer> answers = examSessionAnswerRepository.findByExamSessionId(sessionId);
+        List<UUID> questionIds = answers.stream().map(ExamSessionAnswer::getQuestionId).collect(Collectors.toList());
+        List<dts.com.examination.api.response.InternalQuestionDetailResponse> questionsBatch = contentBuilderClient.getQuestionsBatch(questionIds);
+        Map<UUID, dts.com.examination.api.response.InternalQuestionDetailResponse> questionMap = questionsBatch.stream()
+                .collect(Collectors.toMap(dts.com.examination.api.response.InternalQuestionDetailResponse::getId, q -> q));
+
+        java.math.BigDecimal totalScore = java.math.BigDecimal.ZERO;
+        int correctCount = 0;
+
+        for (ExamSessionAnswer ans : answers) {
+            dts.com.examination.api.response.InternalQuestionDetailResponse qDetail = questionMap.get(ans.getQuestionId());
+            if (qDetail == null || ans.getSelectedAnswer() == null) {
+                ans.setIsCorrect(false);
+                ans.setScore(java.math.BigDecimal.ZERO);
+                continue;
+            }
+
+            boolean isCorrect = false;
+            if (qDetail.getOptions() != null) {
+                for (dts.com.examination.api.response.InternalQuestionOptionResponse opt : qDetail.getOptions()) {
+                    if (opt.getId().toString().equals(ans.getSelectedAnswer()) && opt.getIsCorrect()) {
+                        isCorrect = true;
+                        break;
+                    }
+                }
+            }
+            
+            ans.setIsCorrect(isCorrect);
+            if (isCorrect) {
+                ans.setScore(java.math.BigDecimal.ONE);
+                totalScore = totalScore.add(java.math.BigDecimal.ONE);
+                correctCount++;
+            } else {
+                ans.setScore(java.math.BigDecimal.ZERO);
+            }
+        }
+
+        examSessionAnswerRepository.saveAll(answers);
+        
+        Map<String, Object> meta = new java.util.HashMap<>(session.getMetadata() != null ? session.getMetadata() : Map.of());
+        meta.put("totalScore", totalScore);
+        meta.put("correctCount", correctCount);
+        session.setMetadata(meta);
+        examSessionRepository.save(session);
+
+        return dts.com.examination.api.response.SubmitExamResponse.builder()
+                .sessionId(sessionId)
+                .status("SUBMITTED")
+                .submittedAt(now)
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public dts.com.examination.api.response.ExamResultResponse getExamResult(UUID sessionId, UUID userId) {
+        ExamSession session = examSessionRepository.findById(sessionId)
+                .orElseThrow(() -> new BusinessRuleException("Exam session not found"));
+
+        if (!session.getUserId().equals(userId)) {
+            throw new org.springframework.security.access.AccessDeniedException("Access denied");
+        }
+
+        if (!"SUBMITTED".equals(session.getStatus())) {
+            throw new BusinessRuleException("Exam not submitted yet");
+        }
+
+        ExamVersion examVersion = examVersionRepository.findById(session.getExamVersionId())
+                .orElseThrow(() -> new BusinessRuleException("Exam version not found"));
+        ExamRule examRule = examRuleRepository.findById(examVersion.getExamRuleId())
+                .orElseThrow(() -> new BusinessRuleException("Exam rule not found"));
+
+        if (!"IMMEDIATELY".equals(examRule.getResultReleaseMode())) {
+            throw new BusinessRuleException("Result is hidden until exam period ends");
+        }
+
+        String result = "FAIL";
+        if (examVersion.getExamCriteriaId() != null) {
+            dts.com.examination.domain.entity.ExamCriteria examCriteria = 
+                dts.com.examination.domain.repository.ExamCriteriaRepository.class.cast(
+                    org.springframework.web.context.support.WebApplicationContextUtils.getWebApplicationContext(
+                        ((org.springframework.web.context.request.ServletRequestAttributes) org.springframework.web.context.request.RequestContextHolder.getRequestAttributes()).getRequest().getServletContext()
+                    ).getBean(dts.com.examination.domain.repository.ExamCriteriaRepository.class)
+                ).findById(examVersion.getExamCriteriaId()).orElse(null);
+            
+            if (examCriteria != null && examCriteria.getCriteria() != null && examCriteria.getCriteria().getPassScore() != null) {
+                java.math.BigDecimal score = (java.math.BigDecimal) session.getMetadata().getOrDefault("totalScore", java.math.BigDecimal.ZERO);
+                if (score.compareTo(new java.math.BigDecimal(examCriteria.getCriteria().getPassScore())) >= 0) {
+                    result = "PASS";
+                }
+            }
+        }
+
+        long totalQuestions = examSessionAnswerRepository.countByExamSessionId(sessionId);
+        Integer correctCount = (Integer) session.getMetadata().getOrDefault("correctCount", 0);
+        Object tsObj = session.getMetadata().getOrDefault("totalScore", java.math.BigDecimal.ZERO);
+        java.math.BigDecimal score = (tsObj instanceof Double) ? java.math.BigDecimal.valueOf((Double) tsObj) : (tsObj instanceof Integer) ? java.math.BigDecimal.valueOf((Integer) tsObj) : new java.math.BigDecimal(tsObj.toString());
+
+        dts.com.examination.api.response.ExamResultSummary summary = dts.com.examination.api.response.ExamResultSummary.builder()
+                .score(score)
+                .result(result)
+                .correctQuestions(correctCount)
+                .totalQuestions((int) totalQuestions)
+                .build();
+
+        return dts.com.examination.api.response.ExamResultResponse.builder()
+                .sessionId(sessionId)
+                .status(session.getStatus())
+                .submittedAt(session.getSubmittedAt())
+                .summary(summary)
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public dts.com.examination.api.response.SessionProgressResponse getSessionProgress(UUID sessionId, UUID userId) {
+        ExamSession session = examSessionRepository.findById(sessionId)
+                .orElseThrow(() -> new BusinessRuleException("Exam session not found"));
+        if (!session.getUserId().equals(userId)) {
+            throw new org.springframework.security.access.AccessDeniedException("Access denied");
+        }
+
+        int remainingSeconds = 0;
+        if ("IN_PROGRESS".equals(session.getStatus()) && session.getExpiredAt() != null) {
+            remainingSeconds = (int) java.time.Duration.between(Instant.now(), session.getExpiredAt()).getSeconds();
+            if (remainingSeconds < 0) remainingSeconds = 0;
+        } else if ("READY".equals(session.getStatus())) {
+            remainingSeconds = (Integer) session.getMetadata().getOrDefault("pausedRemainingSeconds", 0);
+        }
+
+        long totalQuestions = examSessionAnswerRepository.countByExamSessionId(sessionId);
+        long answeredQuestions = examSessionAnswerRepository.countByExamSessionIdAndSelectedAnswerIsNotNull(sessionId);
+
+        return dts.com.examination.api.response.SessionProgressResponse.builder()
+                .answeredQuestions((int) answeredQuestions)
+                .totalQuestions((int) totalQuestions)
+                .remainingSeconds(remainingSeconds)
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public dts.com.examination.api.response.PauseSessionResponse pauseSession(UUID sessionId, UUID userId) {
+        ExamSession session = examSessionRepository.findById(sessionId)
+                .orElseThrow(() -> new BusinessRuleException("Exam session not found"));
+        if (!session.getUserId().equals(userId)) {
+            throw new org.springframework.security.access.AccessDeniedException("Access denied");
+        }
+        if (!"IN_PROGRESS".equals(session.getStatus())) {
+            throw new BusinessRuleException("Cannot pause session in current state");
+        }
+
+        ExamVersion examVersion = examVersionRepository.findById(session.getExamVersionId())
+                .orElseThrow(() -> new BusinessRuleException("Exam version not found"));
+        ExamRule examRule = examRuleRepository.findById(examVersion.getExamRuleId())
+                .orElseThrow(() -> new BusinessRuleException("Exam rule not found"));
+
+        if (!examRule.isAllowPause()) {
+            throw new BusinessRuleException("Pause is not allowed");
+        }
+
+        Instant now = Instant.now();
+        int remainingSeconds = 0;
+        if (session.getExpiredAt() != null) {
+            remainingSeconds = (int) java.time.Duration.between(now, session.getExpiredAt()).getSeconds();
+            if (remainingSeconds <= 0) {
+                session.setStatus("EXPIRED");
+                examSessionRepository.save(session);
+                throw new BusinessRuleException("Session Expired");
+            }
+        }
+
+        session.setStatus("READY");
+        Map<String, Object> meta = new java.util.HashMap<>(session.getMetadata() != null ? session.getMetadata() : Map.of());
+        meta.put("pausedRemainingSeconds", remainingSeconds);
+        session.setMetadata(meta);
+        examSessionRepository.save(session);
+
+        return dts.com.examination.api.response.PauseSessionResponse.builder()
+                .sessionId(sessionId)
+                .status("READY")
+                .pausedAt(now)
+                .remainingSeconds(remainingSeconds)
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public dts.com.examination.api.response.ResumeSessionResponse resumeSession(UUID sessionId, UUID userId) {
+        ExamSession session = examSessionRepository.findById(sessionId)
+                .orElseThrow(() -> new BusinessRuleException("Exam session not found"));
+        if (!session.getUserId().equals(userId)) {
+            throw new org.springframework.security.access.AccessDeniedException("Access denied");
+        }
+        if (!"READY".equals(session.getStatus())) {
+            throw new BusinessRuleException("Cannot resume session in current state");
+        }
+
+        ExamVersion examVersion = examVersionRepository.findById(session.getExamVersionId())
+                .orElseThrow(() -> new BusinessRuleException("Exam version not found"));
+        ExamRule examRule = examRuleRepository.findById(examVersion.getExamRuleId())
+                .orElseThrow(() -> new BusinessRuleException("Exam rule not found"));
+
+        if (!examRule.isAllowResume()) {
+            throw new BusinessRuleException("Resume is not allowed");
+        }
+
+        int remainingSeconds = (Integer) session.getMetadata().getOrDefault("pausedRemainingSeconds", 0);
+        Instant now = Instant.now();
+        Instant expiredAt = now.plusSeconds(remainingSeconds);
+
+        session.setStatus("IN_PROGRESS");
+        session.setExpiredAt(expiredAt);
+        
+        Map<String, Object> meta = new java.util.HashMap<>(session.getMetadata());
+        meta.remove("pausedRemainingSeconds");
+        session.setMetadata(meta);
+        examSessionRepository.save(session);
+
+        return dts.com.examination.api.response.ResumeSessionResponse.builder()
+                .sessionId(sessionId)
+                .status("IN_PROGRESS")
+                .resumedAt(now)
+                .expiredAt(expiredAt)
+                .remainingSeconds(remainingSeconds)
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public dts.com.examination.api.response.SessionHistoryResponse getSessionHistory(UUID examId, UUID userId, int page, int size, String status, String sort) {
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size, 
+            org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "startedAt"));
+
+        org.springframework.data.domain.Page<ExamSession> sessionPage = examSessionRepository.findByExamIdAndUserId(examId, userId, pageable);
+        
+        List<dts.com.examination.api.response.SessionHistoryItemResponse> items = new ArrayList<>();
+        for (ExamSession session : sessionPage.getContent()) {
+            dts.com.examination.api.response.ExamResultSummary summary = null;
+            if ("SUBMITTED".equals(session.getStatus())) {
+                long totalQuestions = examSessionAnswerRepository.countByExamSessionId(session.getId());
+                Integer correctCount = (Integer) session.getMetadata().getOrDefault("correctCount", 0);
+                Object tsObj = session.getMetadata().getOrDefault("totalScore", java.math.BigDecimal.ZERO);
+                java.math.BigDecimal score = (tsObj instanceof Double) ? java.math.BigDecimal.valueOf((Double) tsObj) : (tsObj instanceof Integer) ? java.math.BigDecimal.valueOf((Integer) tsObj) : new java.math.BigDecimal(tsObj.toString());
+                
+                String result = "FAIL";
+                ExamVersion examVersion = examVersionRepository.findById(session.getExamVersionId()).orElse(null);
+                if (examVersion != null && examVersion.getExamCriteriaId() != null) {
+                    dts.com.examination.domain.entity.ExamCriteria examCriteria = 
+                        dts.com.examination.domain.repository.ExamCriteriaRepository.class.cast(
+                            org.springframework.web.context.support.WebApplicationContextUtils.getWebApplicationContext(
+                                ((org.springframework.web.context.request.ServletRequestAttributes) org.springframework.web.context.request.RequestContextHolder.getRequestAttributes()).getRequest().getServletContext()
+                            ).getBean(dts.com.examination.domain.repository.ExamCriteriaRepository.class)
+                        ).findById(examVersion.getExamCriteriaId()).orElse(null);
+                    
+                    if (examCriteria != null && examCriteria.getCriteria() != null && examCriteria.getCriteria().getPassScore() != null) {
+                        if (score.compareTo(new java.math.BigDecimal(examCriteria.getCriteria().getPassScore())) >= 0) {
+                            result = "PASS";
+                        }
+                    }
+                }
+                
+                summary = dts.com.examination.api.response.ExamResultSummary.builder()
+                        .score(score)
+                        .result(result)
+                        .correctQuestions(correctCount)
+                        .totalQuestions((int) totalQuestions)
+                        .build();
+            }
+
+            items.add(dts.com.examination.api.response.SessionHistoryItemResponse.builder()
+                    .sessionId(session.getId())
+                    .examVersionId(session.getExamVersionId())
+                    .attemptNo(session.getAttemptNo())
+                    .status(session.getStatus())
+                    .startedAt(session.getStartedAt())
+                    .submittedAt(session.getSubmittedAt())
+                    .summary(summary)
+                    .build());
+        }
+
+        return dts.com.examination.api.response.SessionHistoryResponse.builder()
+                .page(sessionPage.getNumber())
+                .size(sessionPage.getSize())
+                .totalElements(sessionPage.getTotalElements())
+                .totalPages(sessionPage.getTotalPages())
+                .items(items)
+                .build();
+    }
 }

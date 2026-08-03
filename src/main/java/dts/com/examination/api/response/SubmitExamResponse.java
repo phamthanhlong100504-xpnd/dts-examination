@@ -5,15 +5,16 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.Instant;
 import java.util.UUID;
 
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class InternalQuestionOptionResponse {
-    private UUID id;
-    private String content;
-    private Integer sortOrder;
-    private Boolean isCorrect;
+public class SubmitExamResponse {
+    private UUID sessionId;
+    private String status;
+    private Instant submittedAt;
+    private ExamResultSummary summary;
 }

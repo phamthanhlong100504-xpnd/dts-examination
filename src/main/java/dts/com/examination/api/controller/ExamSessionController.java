@@ -66,4 +66,52 @@ public class ExamSessionController {
         dts.com.examination.api.response.SaveAnswersResponse response = examSessionService.saveAnswers(sessionId, request, userId);
         return ResponseEntity.ok(response);
     }
+
+    @org.springframework.web.bind.annotation.PostMapping("/{sessionId}/submit")
+    // @PreAuthorize("hasAuthority('PERM_exam_session:update')")
+    public ResponseEntity<dts.com.examination.api.response.SubmitExamResponse> submitExam(
+            @PathVariable UUID sessionId,
+            @org.springframework.web.bind.annotation.RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+            Principal principal) {
+        UUID userId = UUID.fromString(principal.getName());
+        dts.com.examination.api.response.SubmitExamResponse response = examSessionService.submitExam(sessionId, idempotencyKey, userId);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/{sessionId}/result")
+    // @PreAuthorize("hasAuthority('PERM_exam_session:read')")
+    public ResponseEntity<dts.com.examination.api.response.ExamResultResponse> getExamResult(
+            @PathVariable UUID sessionId,
+            Principal principal) {
+        UUID userId = UUID.fromString(principal.getName());
+        dts.com.examination.api.response.ExamResultResponse response = examSessionService.getExamResult(sessionId, userId);
+        return ResponseEntity.ok(response);
+    }
+    @GetMapping("/{sessionId}/progress")
+    // @PreAuthorize("hasAuthority('PERM_exam_session:read')")
+    public ResponseEntity<dts.com.examination.api.response.SessionProgressResponse> getSessionProgress(
+            @PathVariable UUID sessionId,
+            Principal principal) {
+        UUID userId = UUID.fromString(principal.getName());
+        return ResponseEntity.ok(examSessionService.getSessionProgress(sessionId, userId));
+    }
+
+    @org.springframework.web.bind.annotation.PatchMapping("/{sessionId}/pause")
+    // @PreAuthorize("hasAuthority('PERM_exam_session:update')")
+    public ResponseEntity<dts.com.examination.api.response.PauseSessionResponse> pauseSession(
+            @PathVariable UUID sessionId,
+            Principal principal) {
+        UUID userId = UUID.fromString(principal.getName());
+        return ResponseEntity.ok(examSessionService.pauseSession(sessionId, userId));
+    }
+
+    @org.springframework.web.bind.annotation.PatchMapping("/{sessionId}/resume")
+    // @PreAuthorize("hasAuthority('PERM_exam_session:update')")
+    public ResponseEntity<dts.com.examination.api.response.ResumeSessionResponse> resumeSession(
+            @PathVariable UUID sessionId,
+            Principal principal) {
+        UUID userId = UUID.fromString(principal.getName());
+        return ResponseEntity.ok(examSessionService.resumeSession(sessionId, userId));
+    }
+
 }

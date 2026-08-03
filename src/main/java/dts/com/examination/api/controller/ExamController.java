@@ -30,6 +30,7 @@ import java.util.UUID;
 public class ExamController {
 
     private final ExamService examService;
+    private final dts.com.examination.application.service.ExamSessionService examSessionService;
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
@@ -71,5 +72,18 @@ public class ExamController {
     @PreAuthorize("hasAuthority('PERM_exam:update')")
     public ExamResponse changeStatus(@PathVariable UUID examId, @Valid @RequestBody ChangeExamStatusRequest request) {
         return examService.changeStatus(examId, request);
+    }
+
+    @GetMapping("/{examId}/sessions")
+    // @PreAuthorize("hasAuthority('PERM_exam_session:read')")
+    public org.springframework.http.ResponseEntity<dts.com.examination.api.response.SessionHistoryResponse> getSessionHistory(
+            @PathVariable UUID examId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String sort,
+            java.security.Principal principal) {
+        UUID userId = UUID.fromString(principal.getName());
+        return org.springframework.http.ResponseEntity.ok(examSessionService.getSessionHistory(examId, userId, page, size, status, sort));
     }
 }
