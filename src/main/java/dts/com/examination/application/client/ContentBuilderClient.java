@@ -12,4 +12,7 @@ import java.util.UUID;
 public interface ContentBuilderClient {
     @GetMapping("/api/v1/content-builder/internal/questions/metadata")
     List<Map<String, Object>> getQuestionsMetadata(@RequestParam("contentId") UUID contentId, @RequestParam("contentType") String contentType);
+
+    @org.springframework.web.bind.annotation.PostMapping("/api/v1/content-builder/internal/questions/batch")
+    List<dts.com.examination.api.response.InternalQuestionDetailResponse> getQuestionsBatch(@org.springframework.web.bind.annotation.RequestBody List<UUID> questionIds);
 }
