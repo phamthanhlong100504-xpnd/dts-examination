@@ -6,10 +6,11 @@ services:
     ports: ["8088:8088"]
     mem_limit: 275m
     environment:
-      JAVA_TOOL_OPTIONS: "-Xms64m -Xmx128m -Xquickstart"
+      JAVA_TOOL_OPTIONS: "-Xms64m -Xmx128m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m -Xss256k"
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/examination
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: "K59Ptl*100504"
+      EUREKA_URI: "http://eureka-server:8761/eureka/"
     networks: [dts-network]
 
 networks:

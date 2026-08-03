@@ -25,6 +25,15 @@ server:
     threads:
       max: 50
 
+
 jwt:
   # Secret key đã encode base64, dài > 256bit
   secret: uPq3xK8mR5vY2wZ9aB4cD7eF1gH3iJ6kL0nO5pQ8rS2tU4vW6xY9zA1bC3dE7fG9
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_URI:http://localhost:8761/eureka/}
+    enabled: true
+  instance:
+    prefer-ip-address: true
