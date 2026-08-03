@@ -28,7 +28,7 @@
 
 | Name | Type | Required | Description | Validation Rules |
 | :--- | :--- | :--- | :--- | :--- |
-| `Authorization` | String | Yes | Bearer token for authentication | Must be a valid JWT |
+| `Authorization` | String | Yes | Bearer token for authentication | Must be a valid JWT containing the permission `exam_session:create` |
 
 #### Request Body
 
@@ -87,7 +87,7 @@
 
 ### Service Layer
 
-1. **Permission Validation**: Verify the user is authenticated and has permission to start an exam.
+1. **Permission Validation**: Verify the user is authenticated and has permission to start an exam (`PERM_exam_session:create`). *(Lưu ý: Tạm thời vô hiệu hóa ở Controller trong môi trường dev local để dễ test)*.
 2. **Business Validation**:
    - Fetch the `ExamVersion` using `examVersionId`. Throw `NF_001` if missing.
    - Check if `ExamVersion.status` is `PUBLISHED`. Throw `BUS_001` if not.
