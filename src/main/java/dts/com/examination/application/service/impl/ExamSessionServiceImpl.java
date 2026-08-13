@@ -82,8 +82,16 @@ public class ExamSessionServiceImpl implements ExamSessionService {
         // }
 
         // Check for existing IN_PROGRESS session (if parallel attempts not allowed)
-        if (examSessionRepository.existsByExamVersionIdAndUserIdAndStatus(examVersion.getId(), userId, "IN_PROGRESS")) {
-            throw new BusinessRuleException("An active session already exists");
+        java.util.Optional<ExamSession> activeSessionOpt = examSessionRepository.findFirstByExamVersionIdAndUserIdAndStatus(examVersion.getId(), userId, "IN_PROGRESS");
+        if (activeSessionOpt.isPresent()) {
+            ExamSession activeSession = activeSessionOpt.get();
+            return dts.com.examination.api.response.ExamSessionResponse.builder()
+                    .id(activeSession.getId())
+                    .examId(examVersion.getExamId())
+                    .startedAt(activeSession.getStartedAt())
+                    .expiredAt(activeSession.getExpiredAt())
+                    .status(activeSession.getStatus())
+                    .build();
         }
 
         List<Map<String, Object>> questionsMetadata = contentBuilderClient.getQuestionsMetadata(

@@ -16,6 +16,8 @@ public interface ExamSessionRepository extends JpaRepository<ExamSession, UUID> 
     int countByExamVersionIdAndUserId(UUID examVersionId, UUID userId);
     
     boolean existsByExamVersionIdAndUserIdAndStatus(UUID examVersionId, UUID userId, String status);
+    
+    java.util.Optional<ExamSession> findFirstByExamVersionIdAndUserIdAndStatus(UUID examVersionId, UUID userId, String status);
 
     @Query("SELECT s FROM ExamSession s JOIN ExamVersion v ON s.examVersionId = v.id " +
            "WHERE v.examId = :examId AND s.userId = :userId AND s.deletedAt IS NULL")
