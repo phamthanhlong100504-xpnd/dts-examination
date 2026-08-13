@@ -157,7 +157,9 @@ public class ExamSessionServiceImpl implements ExamSessionService {
 
         // 7. Map Response
         return ExamSessionResponse.builder()
+                .id(session.getId())
                 .sessionId(session.getId())
+                .examId(examVersion.getExamId())
                 .examVersionId(session.getExamVersionId())
                 .attemptNo(session.getAttemptNo())
                 .status(session.getStatus())

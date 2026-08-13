@@ -13,7 +13,9 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ExamSessionResponse {
-    private UUID sessionId;
+    private UUID id;
+    private UUID sessionId; // Keep for backward compatibility
+    private UUID examId;
     private UUID examVersionId;
     private Integer attemptNo;
     private String status;
