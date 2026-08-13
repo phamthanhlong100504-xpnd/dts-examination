@@ -15,8 +15,9 @@ import java.util.UUID;
 @AllArgsConstructor
 public class StartExamSessionRequest {
     
-    @NotNull(message = "Exam version ID is required")
     private UUID examVersionId;
+    
+    private UUID examId;
     
     private Map<String, Object> clientInfo;
 }

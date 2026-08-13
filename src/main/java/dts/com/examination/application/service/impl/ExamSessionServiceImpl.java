@@ -44,8 +44,17 @@ public class ExamSessionServiceImpl implements ExamSessionService {
     @Transactional
     public ExamSessionResponse startSession(StartExamSessionRequest request, UUID userId) {
         // 1. Fetch Exam Version & Validate Status
-        ExamVersion examVersion = examVersionRepository.findById(request.getExamVersionId())
-                .orElseThrow(() -> new BusinessRuleException("Exam version not found"));
+        ExamVersion examVersion;
+        if (request.getExamVersionId() != null) {
+            examVersion = examVersionRepository.findById(request.getExamVersionId())
+                    .orElseThrow(() -> new BusinessRuleException("Exam version not found"));
+        } else if (request.getExamId() != null) {
+            examVersion = examVersionRepository.findByExamIdAndStatusAndDeletedAtIsNullList(request.getExamId(), "PUBLISHED")
+                    .stream().findFirst()
+                    .orElseThrow(() -> new BusinessRuleException("No published version found for this exam"));
+        } else {
+            throw new BusinessRuleException("Either examVersionId or examId must be provided");
+        }
 
         if (!"PUBLISHED".equals(examVersion.getStatus())) {
             throw new BusinessRuleException("Exam version is not published");
