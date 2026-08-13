@@ -111,6 +111,7 @@
      - `submitted_at = now`
      - `idempotency_key = request.idempotencyKey`
    - Commit transaction.
+   - **Event Publishing**: Publish `LEARNING_RESULT_CREATED` event to Kafka topic `learning-results` containing the result snapshot (scores, counts).
 5. Return the result summary.
 
 ---
@@ -123,6 +124,7 @@
 
 ### External Interaction
 - **REST/gRPC to Question Bank Service**: Fetch correct answers/grading metadata for a batch of `questionId`s.
+- **Kafka**: Publish `LEARNING_RESULT_CREATED` event to `learning-results` topic for asynchronous result processing.
 
 ---
 

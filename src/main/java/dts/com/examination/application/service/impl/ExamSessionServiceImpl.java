@@ -13,8 +13,10 @@ import dts.com.examination.domain.repository.ExamRuleRepository;
 import dts.com.examination.domain.repository.ExamSessionAnswerRepository;
 import dts.com.examination.domain.repository.ExamSessionRepository;
 import dts.com.examination.domain.repository.ExamVersionRepository;
+import dts.com.examination.application.event.LearningResultEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,6 +38,7 @@ public class ExamSessionServiceImpl implements ExamSessionService {
     private final ExamVersionRepository examVersionRepository;
     private final ExamRuleRepository examRuleRepository;
     private final ContentBuilderClient contentBuilderClient;
+    private final KafkaTemplate<String, Object> kafkaTemplate;
 
     @Override
     @Transactional
@@ -397,6 +400,38 @@ public class ExamSessionServiceImpl implements ExamSessionService {
         meta.put("correctCount", correctCount);
         session.setMetadata(meta);
         examSessionRepository.save(session);
+        
+        // --- Publish Event to Kafka ---
+        int durationSeconds = session.getStartedAt() != null ? 
+            (int) java.time.Duration.between(session.getStartedAt(), now).getSeconds() : 0;
+            
+        LearningResultEvent event = LearningResultEvent.builder()
+                .eventId(UUID.randomUUID())
+                .eventType("LEARNING_RESULT_CREATED")
+                .eventVersion(1)
+                .occurredAt(now)
+                .userId(userId)
+                .sourceType("EXAM_SESSION")
+                .sourceId(sessionId)
+                .targetType("EXAM")
+                .targetId(session.getExamVersionId())
+                .attemptNo(session.getAttemptNo())
+                .result("SUBMITTED") // examination only submits, Result evaluates pass/fail if not immediately
+                .score(totalScore)
+                .maxScore(java.math.BigDecimal.valueOf(answers.size()))
+                .progress(100.0) // Exam is 100% completed when submitted
+                .durationSeconds(durationSeconds)
+                .startedAt(session.getStartedAt())
+                .completedAt(now)
+                .resultSnapshot(Map.of(
+                        "totalQuestions", answers.size(),
+                        "correctCount", correctCount
+                ))
+                .metadata(Map.of("idempotencyKey", idempotencyKey))
+                .build();
+                
+        kafkaTemplate.send("learning-results", session.getUserId().toString(), event);
+        // ------------------------------
 
         return dts.com.examination.api.response.SubmitExamResponse.builder()
                 .sessionId(sessionId)
