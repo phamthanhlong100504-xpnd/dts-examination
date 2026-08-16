@@ -481,16 +481,16 @@ public class ExamSessionServiceImpl implements ExamSessionService {
         }
 
         String result = "FAIL";
+        java.math.BigDecimal score = extractTotalScore(session.getMetadata());
         if (examVersion.getExamCriteriaId() != null) {
-            dts.com.examination.domain.entity.ExamCriteria examCriteria = 
+            dts.com.examination.domain.entity.ExamCriteria examCriteria =
                 dts.com.examination.domain.repository.ExamCriteriaRepository.class.cast(
                     org.springframework.web.context.support.WebApplicationContextUtils.getWebApplicationContext(
                         ((org.springframework.web.context.request.ServletRequestAttributes) org.springframework.web.context.request.RequestContextHolder.getRequestAttributes()).getRequest().getServletContext()
                     ).getBean(dts.com.examination.domain.repository.ExamCriteriaRepository.class)
                 ).findById(examVersion.getExamCriteriaId()).orElse(null);
-            
+
             if (examCriteria != null && examCriteria.getCriteria() != null && examCriteria.getCriteria().getPassScore() != null) {
-                java.math.BigDecimal score = (java.math.BigDecimal) session.getMetadata().getOrDefault("totalScore", java.math.BigDecimal.ZERO);
                 if (score.compareTo(new java.math.BigDecimal(examCriteria.getCriteria().getPassScore())) >= 0) {
                     result = "PASS";
                 }
@@ -498,9 +498,7 @@ public class ExamSessionServiceImpl implements ExamSessionService {
         }
 
         long totalQuestions = examSessionAnswerRepository.countByExamSessionId(sessionId);
-        Integer correctCount = (Integer) session.getMetadata().getOrDefault("correctCount", 0);
-        Object tsObj = session.getMetadata().getOrDefault("totalScore", java.math.BigDecimal.ZERO);
-        java.math.BigDecimal score = (tsObj instanceof Double) ? java.math.BigDecimal.valueOf((Double) tsObj) : (tsObj instanceof Integer) ? java.math.BigDecimal.valueOf((Integer) tsObj) : new java.math.BigDecimal(tsObj.toString());
+        int correctCount = extractCorrectCount(session.getMetadata());
 
         dts.com.examination.api.response.ExamResultSummary summary = dts.com.examination.api.response.ExamResultSummary.builder()
                 .score(score)
@@ -645,9 +643,8 @@ public class ExamSessionServiceImpl implements ExamSessionService {
             dts.com.examination.api.response.ExamResultSummary summary = null;
             if ("SUBMITTED".equals(session.getStatus())) {
                 long totalQuestions = examSessionAnswerRepository.countByExamSessionId(session.getId());
-                Integer correctCount = (Integer) session.getMetadata().getOrDefault("correctCount", 0);
-                Object tsObj = session.getMetadata().getOrDefault("totalScore", java.math.BigDecimal.ZERO);
-                java.math.BigDecimal score = (tsObj instanceof Double) ? java.math.BigDecimal.valueOf((Double) tsObj) : (tsObj instanceof Integer) ? java.math.BigDecimal.valueOf((Integer) tsObj) : new java.math.BigDecimal(tsObj.toString());
+                int correctCount = extractCorrectCount(session.getMetadata());
+                java.math.BigDecimal score = extractTotalScore(session.getMetadata());
                 
                 String result = "FAIL";
                 ExamVersion examVersion = examVersionRepository.findById(session.getExamVersionId()).orElse(null);
@@ -692,5 +689,37 @@ public class ExamSessionServiceImpl implements ExamSessionService {
                 .totalPages(sessionPage.getTotalPages())
                 .items(items)
                 .build();
+    }
+
+    /**
+     * Đọc điểm tổng (totalScore) từ metadata của session.
+     * Metadata là JSONB nên khi đọc lại số có thể là Integer, Double hay
+     * BigDecimal tùy cách lưu — không được cast trực tiếp (gây ClassCastException
+     * -> HTTP 500). Fallback về 0 nếu thiếu/null.
+     */
+    private java.math.BigDecimal extractTotalScore(Map<String, Object> metadata) {
+        Object value = metadata.getOrDefault("totalScore", java.math.BigDecimal.ZERO);
+        if (value instanceof java.math.BigDecimal) {
+            return (java.math.BigDecimal) value;
+        }
+        if (value == null) {
+            return java.math.BigDecimal.ZERO;
+        }
+        return new java.math.BigDecimal(value.toString());
+    }
+
+    /**
+     * Đọc số câu đúng (correctCount) từ metadata của session, chấp nhận mọi kiểu
+     * số JSONB (Integer/Double/...). Fallback về 0 nếu thiếu/null.
+     */
+    private int extractCorrectCount(Map<String, Object> metadata) {
+        Object value = metadata.getOrDefault("correctCount", 0);
+        if (value instanceof Number) {
+            return ((Number) value).intValue();
+        }
+        if (value == null) {
+            return 0;
+        }
+        return Integer.parseInt(value.toString());
     }
 }
