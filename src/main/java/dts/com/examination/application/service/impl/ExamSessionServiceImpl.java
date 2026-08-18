@@ -236,9 +236,17 @@ public class ExamSessionServiceImpl implements ExamSessionService {
 
         List<ExamSessionAnswer> answers = examSessionAnswerRepository.findByExamSessionId(sessionId);
         answers.sort((a, b) -> {
-            Integer posA = a.getDisplaySnapshot() != null ? (Integer) a.getDisplaySnapshot().get("position") : 0;
-            Integer posB = b.getDisplaySnapshot() != null ? (Integer) b.getDisplaySnapshot().get("position") : 0;
-            return posA.compareTo(posB);
+            int posA = 0;
+            if (a.getDisplaySnapshot() != null && a.getDisplaySnapshot().get("position") != null) {
+                Object p = a.getDisplaySnapshot().get("position");
+                if (p instanceof Number) posA = ((Number) p).intValue();
+            }
+            int posB = 0;
+            if (b.getDisplaySnapshot() != null && b.getDisplaySnapshot().get("position") != null) {
+                Object p = b.getDisplaySnapshot().get("position");
+                if (p instanceof Number) posB = ((Number) p).intValue();
+            }
+            return Integer.compare(posA, posB);
         });
 
         List<UUID> questionIds = answers.stream().map(ExamSessionAnswer::getQuestionId).collect(Collectors.toList());
@@ -461,7 +469,7 @@ public class ExamSessionServiceImpl implements ExamSessionService {
                         "totalQuestions", answers.size(),
                         "correctCount", correctCount
                 ))
-                .metadata(Map.of("idempotencyKey", idempotencyKey))
+                .metadata(idempotencyKey != null ? Map.of("idempotencyKey", idempotencyKey) : Map.of())
                 .build();
                 
         kafkaTemplate.send("learning-results", session.getUserId().toString(), event);
