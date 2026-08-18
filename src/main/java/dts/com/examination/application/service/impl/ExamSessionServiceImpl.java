@@ -391,11 +391,28 @@ public class ExamSessionServiceImpl implements ExamSessionService {
             }
 
             boolean isCorrect = false;
+            Map<String, Object> selectedAnsMap = ans.getSelectedAnswer();
+            Object valObj = selectedAnsMap.get("value");
+            String selectedVal = valObj != null ? valObj.toString() : "";
+
             if (qDetail.getOptions() != null) {
-                for (dts.com.examination.api.response.InternalQuestionOptionResponse opt : qDetail.getOptions()) {
-                    if (opt.getId().toString().equals(ans.getSelectedAnswer()) && opt.getIsCorrect()) {
-                        isCorrect = true;
-                        break;
+                String type = (String) selectedAnsMap.get("type");
+                if ("multiple_choice".equalsIgnoreCase(type) || "MULTIPLE_CHOICE".equalsIgnoreCase(qDetail.getType())) {
+                    java.util.Set<String> selectedIds = new java.util.HashSet<>(java.util.Arrays.asList(selectedVal.split(",")));
+                    selectedIds.removeIf(String::isEmpty);
+                    
+                    java.util.Set<String> correctIds = qDetail.getOptions().stream()
+                            .filter(dts.com.examination.api.response.InternalQuestionOptionResponse::getIsCorrect)
+                            .map(o -> o.getId().toString())
+                            .collect(java.util.stream.Collectors.toSet());
+                            
+                    isCorrect = !correctIds.isEmpty() && selectedIds.equals(correctIds);
+                } else {
+                    for (dts.com.examination.api.response.InternalQuestionOptionResponse opt : qDetail.getOptions()) {
+                        if (opt.getId().toString().equals(selectedVal) && opt.getIsCorrect()) {
+                            isCorrect = true;
+                            break;
+                        }
                     }
                 }
             }
