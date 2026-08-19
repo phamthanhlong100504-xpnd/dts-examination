@@ -507,6 +507,7 @@ public class ExamSessionServiceImpl implements ExamSessionService {
 
         String result = "FAIL";
         java.math.BigDecimal score = extractTotalScore(session.getMetadata());
+        boolean isPassDetermined = false;
         if (examVersion.getExamCriteriaId() != null) {
             dts.com.examination.domain.entity.ExamCriteria examCriteria =
                 dts.com.examination.domain.repository.ExamCriteriaRepository.class.cast(
@@ -518,6 +519,33 @@ public class ExamSessionServiceImpl implements ExamSessionService {
             if (examCriteria != null && examCriteria.getCriteria() != null && examCriteria.getCriteria().getPassScore() != null) {
                 if (score.compareTo(new java.math.BigDecimal(examCriteria.getCriteria().getPassScore())) >= 0) {
                     result = "PASS";
+                }
+                isPassDetermined = true;
+            }
+        }
+
+        if (!isPassDetermined) {
+            dts.com.examination.domain.entity.Exam exam =
+                dts.com.examination.domain.repository.ExamRepository.class.cast(
+                    org.springframework.web.context.support.WebApplicationContextUtils.getWebApplicationContext(
+                        ((org.springframework.web.context.request.ServletRequestAttributes) org.springframework.web.context.request.RequestContextHolder.getRequestAttributes()).getRequest().getServletContext()
+                    ).getBean(dts.com.examination.domain.repository.ExamRepository.class)
+                ).findByIdAndNotDeleted(examVersion.getExamId()).orElse(null);
+
+            if (exam != null && exam.getMetadata() != null && exam.getMetadata().containsKey("passScore")) {
+                Object passScoreObj = exam.getMetadata().get("passScore");
+                if (passScoreObj instanceof Number) {
+                    if (score.compareTo(new java.math.BigDecimal(((Number) passScoreObj).doubleValue())) >= 0) {
+                        result = "PASS";
+                    }
+                } else if (passScoreObj instanceof String) {
+                    try {
+                        if (score.compareTo(new java.math.BigDecimal((String) passScoreObj)) >= 0) {
+                            result = "PASS";
+                        }
+                    } catch (Exception e) {
+                        log.error("Failed to parse passScore from exam metadata: {}", passScoreObj);
+                    }
                 }
             }
         }
