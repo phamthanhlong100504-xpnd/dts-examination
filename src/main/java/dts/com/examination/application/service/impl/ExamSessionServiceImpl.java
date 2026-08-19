@@ -51,9 +51,7 @@ public class ExamSessionServiceImpl implements ExamSessionService {
         } else if (request.getExamId() != null) {
             examVersion = examVersionRepository.findByExamIdAndStatusAndDeletedAtIsNullList(request.getExamId(), "PUBLISHED")
                     .stream().findFirst()
-                    .orElseGet(() -> examVersionRepository.findByExamIdAndStatus(request.getExamId(), null, org.springframework.data.domain.PageRequest.of(0, 1, org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt")))
-                            .stream().findFirst()
-                            .orElseThrow(() -> new BusinessRuleException("No version found for this exam")));
+                    .orElseThrow(() -> new BusinessRuleException("No published version found for this exam"));
         } else {
             throw new BusinessRuleException("Either examVersionId or examId must be provided");
         }
