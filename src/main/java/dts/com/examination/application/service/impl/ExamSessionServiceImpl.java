@@ -447,6 +447,19 @@ public class ExamSessionServiceImpl implements ExamSessionService {
         int durationSeconds = session.getStartedAt() != null ? 
             (int) java.time.Duration.between(session.getStartedAt(), now).getSeconds() : 0;
             
+        ExamVersion examVersion = examVersionRepository.findById(session.getExamVersionId())
+                .orElseThrow(() -> new BusinessRuleException("Exam version not found"));
+        ExamRule examRule = examRuleRepository.findById(examVersion.getExamRuleId())
+                .orElseThrow(() -> new BusinessRuleException("Exam rule not found"));
+
+        String finalResult = "SUBMITTED";
+        if ("IMMEDIATELY".equals(examRule.getResultReleaseMode())) {
+            finalResult = evaluateExamResult(examVersion, totalScore);
+            // Result evaluates to "PASS" or "FAIL", map to PASSED/FAILED for dts-result
+            if ("PASS".equals(finalResult)) finalResult = "PASSED";
+            if ("FAIL".equals(finalResult)) finalResult = "FAILED";
+        }
+
         LearningResultEvent event = LearningResultEvent.builder()
                 .eventId(UUID.randomUUID())
                 .eventType("LEARNING_RESULT_CREATED")
@@ -458,7 +471,7 @@ public class ExamSessionServiceImpl implements ExamSessionService {
                 .targetType("EXAM")
                 .targetId(session.getExamVersionId())
                 .attemptNo(session.getAttemptNo())
-                .result("SUBMITTED") // examination only submits, Result evaluates pass/fail if not immediately
+                .result("PASSED".equals(finalResult) ? "PASSED" : "FAILED".equals(finalResult) ? "FAILED" : "SUBMITTED")
                 .score(totalScore)
                 .maxScore(java.math.BigDecimal.valueOf(answers.size()))
                 .progress(100.0) // Exam is 100% completed when submitted
@@ -505,54 +518,12 @@ public class ExamSessionServiceImpl implements ExamSessionService {
             throw new BusinessRuleException("Result is hidden until exam period ends");
         }
 
-        String result = "FAIL";
-        java.math.BigDecimal score = extractTotalScore(session.getMetadata());
-        boolean isPassDetermined = false;
-        if (examVersion.getExamCriteriaId() != null) {
-            dts.com.examination.domain.entity.ExamCriteria examCriteria =
-                dts.com.examination.domain.repository.ExamCriteriaRepository.class.cast(
-                    org.springframework.web.context.support.WebApplicationContextUtils.getWebApplicationContext(
-                        ((org.springframework.web.context.request.ServletRequestAttributes) org.springframework.web.context.request.RequestContextHolder.getRequestAttributes()).getRequest().getServletContext()
-                    ).getBean(dts.com.examination.domain.repository.ExamCriteriaRepository.class)
-                ).findById(examVersion.getExamCriteriaId()).orElse(null);
-
-            if (examCriteria != null && examCriteria.getCriteria() != null && examCriteria.getCriteria().getPassScore() != null) {
-                if (score.compareTo(new java.math.BigDecimal(examCriteria.getCriteria().getPassScore())) >= 0) {
-                    result = "PASS";
-                }
-                isPassDetermined = true;
-            }
-        }
-
-        if (!isPassDetermined) {
-            dts.com.examination.domain.entity.Exam exam =
-                dts.com.examination.domain.repository.ExamRepository.class.cast(
-                    org.springframework.web.context.support.WebApplicationContextUtils.getWebApplicationContext(
-                        ((org.springframework.web.context.request.ServletRequestAttributes) org.springframework.web.context.request.RequestContextHolder.getRequestAttributes()).getRequest().getServletContext()
-                    ).getBean(dts.com.examination.domain.repository.ExamRepository.class)
-                ).findByIdAndNotDeleted(examVersion.getExamId()).orElse(null);
-
-            if (exam != null && exam.getMetadata() != null && exam.getMetadata().containsKey("passScore")) {
-                Object passScoreObj = exam.getMetadata().get("passScore");
-                if (passScoreObj instanceof Number) {
-                    if (score.compareTo(new java.math.BigDecimal(((Number) passScoreObj).doubleValue())) >= 0) {
-                        result = "PASS";
-                    }
-                } else if (passScoreObj instanceof String) {
-                    try {
-                        if (score.compareTo(new java.math.BigDecimal((String) passScoreObj)) >= 0) {
-                            result = "PASS";
-                        }
-                    } catch (Exception e) {
-                        log.error("Failed to parse passScore from exam metadata: {}", passScoreObj);
-                    }
-                }
-            }
-        }
+        String result = evaluateExamResult(examVersion, extractTotalScore(session.getMetadata()));
 
         long totalQuestions = examSessionAnswerRepository.countByExamSessionId(sessionId);
         long answeredQuestions = examSessionAnswerRepository.countByExamSessionIdAndSelectedAnswerIsNotNull(sessionId);
         int correctCount = extractCorrectCount(session.getMetadata());
+        java.math.BigDecimal score = extractTotalScore(session.getMetadata());
         int wrongQuestions = (int) answeredQuestions - correctCount;
         int unansweredQuestions = (int) totalQuestions - (int) answeredQuestions;
 
@@ -780,5 +751,52 @@ public class ExamSessionServiceImpl implements ExamSessionService {
             return 0;
         }
         return Integer.parseInt(value.toString());
+    }
+
+    private String evaluateExamResult(ExamVersion examVersion, java.math.BigDecimal score) {
+        String result = "FAIL";
+        boolean isPassDetermined = false;
+        if (examVersion.getExamCriteriaId() != null) {
+            dts.com.examination.domain.entity.ExamCriteria examCriteria =
+                dts.com.examination.domain.repository.ExamCriteriaRepository.class.cast(
+                    org.springframework.web.context.support.WebApplicationContextUtils.getWebApplicationContext(
+                        ((org.springframework.web.context.request.ServletRequestAttributes) org.springframework.web.context.request.RequestContextHolder.getRequestAttributes()).getRequest().getServletContext()
+                    ).getBean(dts.com.examination.domain.repository.ExamCriteriaRepository.class)
+                ).findById(examVersion.getExamCriteriaId()).orElse(null);
+
+            if (examCriteria != null && examCriteria.getCriteria() != null && examCriteria.getCriteria().getPassScore() != null) {
+                if (score.compareTo(new java.math.BigDecimal(examCriteria.getCriteria().getPassScore())) >= 0) {
+                    result = "PASS";
+                }
+                isPassDetermined = true;
+            }
+        }
+
+        if (!isPassDetermined) {
+            dts.com.examination.domain.entity.Exam exam =
+                dts.com.examination.domain.repository.ExamRepository.class.cast(
+                    org.springframework.web.context.support.WebApplicationContextUtils.getWebApplicationContext(
+                        ((org.springframework.web.context.request.ServletRequestAttributes) org.springframework.web.context.request.RequestContextHolder.getRequestAttributes()).getRequest().getServletContext()
+                    ).getBean(dts.com.examination.domain.repository.ExamRepository.class)
+                ).findByIdAndNotDeleted(examVersion.getExamId()).orElse(null);
+
+            if (exam != null && exam.getMetadata() != null && exam.getMetadata().containsKey("passScore")) {
+                Object passScoreObj = exam.getMetadata().get("passScore");
+                if (passScoreObj instanceof Number) {
+                    if (score.compareTo(new java.math.BigDecimal(((Number) passScoreObj).doubleValue())) >= 0) {
+                        result = "PASS";
+                    }
+                } else if (passScoreObj instanceof String) {
+                    try {
+                        if (score.compareTo(new java.math.BigDecimal((String) passScoreObj)) >= 0) {
+                            result = "PASS";
+                        }
+                    } catch (Exception e) {
+                        log.error("Failed to parse passScore from exam metadata: {}", passScoreObj);
+                    }
+                }
+            }
+        }
+        return result;
     }
 }
