@@ -523,13 +523,19 @@ public class ExamSessionServiceImpl implements ExamSessionService {
         }
 
         long totalQuestions = examSessionAnswerRepository.countByExamSessionId(sessionId);
+        long answeredQuestions = examSessionAnswerRepository.countByExamSessionIdAndSelectedAnswerIsNotNull(sessionId);
         int correctCount = extractCorrectCount(session.getMetadata());
+        int wrongQuestions = (int) answeredQuestions - correctCount;
+        int unansweredQuestions = (int) totalQuestions - (int) answeredQuestions;
 
         dts.com.examination.api.response.ExamResultSummary summary = dts.com.examination.api.response.ExamResultSummary.builder()
                 .score(score)
                 .result(result)
                 .correctQuestions(correctCount)
                 .totalQuestions((int) totalQuestions)
+                .answeredQuestions((int) answeredQuestions)
+                .wrongQuestions(wrongQuestions)
+                .unansweredQuestions(unansweredQuestions)
                 .build();
 
         return dts.com.examination.api.response.ExamResultResponse.builder()
