@@ -453,7 +453,7 @@ public class ExamSessionServiceImpl implements ExamSessionService {
                 .orElseThrow(() -> new BusinessRuleException("Exam rule not found"));
 
         String finalResult = "SUBMITTED";
-        if ("IMMEDIATELY".equals(examRule.getResultReleaseMode())) {
+        if ("IMMEDIATE".equals(examRule.getResultReleaseMode())) {
             finalResult = evaluateExamResult(examVersion, totalScore);
             // Result evaluates to "PASS" or "FAIL", map to PASSED/FAILED for dts-result
             if ("PASS".equals(finalResult)) finalResult = "PASSED";
@@ -514,7 +514,7 @@ public class ExamSessionServiceImpl implements ExamSessionService {
         ExamRule examRule = examRuleRepository.findById(examVersion.getExamRuleId())
                 .orElseThrow(() -> new BusinessRuleException("Exam rule not found"));
 
-        if (!"IMMEDIATELY".equals(examRule.getResultReleaseMode())) {
+        if (!"IMMEDIATE".equals(examRule.getResultReleaseMode())) {
             throw new BusinessRuleException("Result is hidden until exam period ends");
         }
 
