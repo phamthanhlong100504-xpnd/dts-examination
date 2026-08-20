@@ -7,6 +7,8 @@ on:
 permissions:
   contents: read
   packages: write
+  checks: write
+  pull-requests: read
 
 env:
   IMAGE: ghcr.io/${{ github.repository_owner }}/examination
@@ -22,9 +24,16 @@ jobs:
 
       # Gradle:
       - uses: gradle/actions/setup-gradle@v4
-      - run: |
+      - name: Run Tests & Build
+        run: |
           export GRADLE_OPTS="-Dorg.gradle.daemon=false -Dorg.gradle.jvmargs=-Xmx512m"
           chmod +x gradlew && ./gradlew clean test bootJar
+
+      - name: Publish Test Results
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: always()
+        with:
+          files: "build/test-results/**/*.xml"
 
       - name: Upload Test Report
         uses: actions/upload-artifact@v4
