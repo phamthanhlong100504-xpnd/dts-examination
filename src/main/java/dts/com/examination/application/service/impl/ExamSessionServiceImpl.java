@@ -37,6 +37,8 @@ public class ExamSessionServiceImpl implements ExamSessionService {
     private final ExamSessionAnswerRepository examSessionAnswerRepository;
     private final ExamVersionRepository examVersionRepository;
     private final ExamRuleRepository examRuleRepository;
+    private final dts.com.examination.domain.repository.ExamCriteriaRepository examCriteriaRepository;
+    private final dts.com.examination.domain.repository.ExamRepository examRepository;
     private final ContentBuilderClient contentBuilderClient;
     private final KafkaTemplate<String, Object> kafkaTemplate;
 
@@ -755,12 +757,7 @@ public class ExamSessionServiceImpl implements ExamSessionService {
         String result = "FAIL";
         boolean isPassDetermined = false;
         if (examVersion.getExamCriteriaId() != null) {
-            dts.com.examination.domain.entity.ExamCriteria examCriteria =
-                dts.com.examination.domain.repository.ExamCriteriaRepository.class.cast(
-                    org.springframework.web.context.support.WebApplicationContextUtils.getWebApplicationContext(
-                        ((org.springframework.web.context.request.ServletRequestAttributes) org.springframework.web.context.request.RequestContextHolder.getRequestAttributes()).getRequest().getServletContext()
-                    ).getBean(dts.com.examination.domain.repository.ExamCriteriaRepository.class)
-                ).findById(examVersion.getExamCriteriaId()).orElse(null);
+            dts.com.examination.domain.entity.ExamCriteria examCriteria = examCriteriaRepository.findById(examVersion.getExamCriteriaId()).orElse(null);
 
             if (examCriteria != null && examCriteria.getCriteria() != null && examCriteria.getCriteria().getPassScore() != null) {
                 if (score.compareTo(new java.math.BigDecimal(examCriteria.getCriteria().getPassScore())) >= 0) {
@@ -771,12 +768,7 @@ public class ExamSessionServiceImpl implements ExamSessionService {
         }
 
         if (!isPassDetermined) {
-            dts.com.examination.domain.entity.Exam exam =
-                dts.com.examination.domain.repository.ExamRepository.class.cast(
-                    org.springframework.web.context.support.WebApplicationContextUtils.getWebApplicationContext(
-                        ((org.springframework.web.context.request.ServletRequestAttributes) org.springframework.web.context.request.RequestContextHolder.getRequestAttributes()).getRequest().getServletContext()
-                    ).getBean(dts.com.examination.domain.repository.ExamRepository.class)
-                ).findByIdAndNotDeleted(examVersion.getExamId()).orElse(null);
+            dts.com.examination.domain.entity.Exam exam = examRepository.findByIdAndNotDeleted(examVersion.getExamId()).orElse(null);
 
             if (exam != null && exam.getMetadata() != null && exam.getMetadata().containsKey("passScore")) {
                 Object passScoreObj = exam.getMetadata().get("passScore");
