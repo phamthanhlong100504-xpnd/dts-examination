@@ -1,6 +1,7 @@
 package dts.com.examination.api.form;
 
 import dts.com.examination.domain.entity.json.CriteriaConfig;
+import java.util.Map;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -15,5 +16,5 @@ public record CreateExamCriteriaRequest(
         @Valid
         CriteriaConfig criteria,
 
-        Object metadata
+        Map<String, Object> metadata
 ) {}
