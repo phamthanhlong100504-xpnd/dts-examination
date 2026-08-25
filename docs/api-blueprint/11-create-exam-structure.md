@@ -37,7 +37,7 @@
 | `sections[].code` | String | Yes | Code identifier for the section | Not blank |
 | `sections[].title` | String | Yes | Display title for the section | Not blank |
 | `sections[].questionCount` | Integer | Yes | Number of questions in this section | > 0 |
-| `sections[].score` | Integer | Yes | Total score for this section | >= 0 |
+| `sections[].score` | Integer | Yes | Points per question in this section | >= 0 |
 | `sections[].order` | Integer | Yes | Order of the section within the structure | Unique within the array |
 | `metadata` | JSON Object | No | Extensible metadata | Valid JSON object |
 
