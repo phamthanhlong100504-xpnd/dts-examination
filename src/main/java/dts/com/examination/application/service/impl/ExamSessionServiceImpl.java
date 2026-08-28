@@ -395,12 +395,16 @@ public class ExamSessionServiceImpl implements ExamSessionService {
 
         java.math.BigDecimal totalScore = java.math.BigDecimal.ZERO;
         int correctCount = 0;
+        boolean failedCriticalQuestion = false;
 
         for (ExamSessionAnswer ans : answers) {
             dts.com.examination.api.response.InternalQuestionDetailResponse qDetail = questionMap.get(ans.getQuestionId());
             if (qDetail == null || ans.getSelectedAnswer() == null) {
                 ans.setIsCorrect(false);
                 ans.setScore(java.math.BigDecimal.ZERO);
+                if (qDetail != null && Boolean.TRUE.equals(qDetail.getIsCritical())) {
+                    failedCriticalQuestion = true;
+                }
                 continue;
             }
 
@@ -438,6 +442,9 @@ public class ExamSessionServiceImpl implements ExamSessionService {
                 correctCount++;
             } else {
                 ans.setScore(java.math.BigDecimal.ZERO);
+                if (Boolean.TRUE.equals(qDetail.getIsCritical())) {
+                    failedCriticalQuestion = true;
+                }
             }
         }
 
@@ -446,6 +453,7 @@ public class ExamSessionServiceImpl implements ExamSessionService {
         Map<String, Object> meta = new java.util.HashMap<>(session.getMetadata() != null ? session.getMetadata() : Map.of());
         meta.put("totalScore", totalScore);
         meta.put("correctCount", correctCount);
+        meta.put("failedCriticalQuestion", failedCriticalQuestion);
         session.setMetadata(meta);
         examSessionRepository.save(session);
         
@@ -460,7 +468,7 @@ public class ExamSessionServiceImpl implements ExamSessionService {
 
         String finalResult = "SUBMITTED";
         if ("IMMEDIATE".equals(examRule.getResultReleaseMode())) {
-            finalResult = evaluateExamResult(examVersion, totalScore);
+            finalResult = evaluateExamResult(examVersion, totalScore, meta);
             // Result evaluates to "PASS" or "FAIL", map to PASSED/FAILED for dts-result
             if ("PASS".equals(finalResult)) finalResult = "PASSED";
             if ("FAIL".equals(finalResult)) finalResult = "FAILED";
@@ -524,7 +532,7 @@ public class ExamSessionServiceImpl implements ExamSessionService {
             throw new BusinessRuleException("Result is hidden until exam period ends");
         }
 
-        String result = evaluateExamResult(examVersion, extractTotalScore(session.getMetadata()));
+        String result = evaluateExamResult(examVersion, extractTotalScore(session.getMetadata()), session.getMetadata());
 
         long totalQuestions = examSessionAnswerRepository.countByExamSessionId(sessionId);
         long answeredQuestions = examSessionAnswerRepository.countByExamSessionIdAndSelectedAnswerIsNotNull(sessionId);
@@ -759,7 +767,11 @@ public class ExamSessionServiceImpl implements ExamSessionService {
         return Integer.parseInt(value.toString());
     }
 
-    private String evaluateExamResult(ExamVersion examVersion, java.math.BigDecimal score) {
+    private String evaluateExamResult(ExamVersion examVersion, java.math.BigDecimal score, Map<String, Object> sessionMetadata) {
+        if (sessionMetadata != null && Boolean.TRUE.equals(sessionMetadata.get("failedCriticalQuestion"))) {
+            return "FAIL";
+        }
+        
         String result = "FAIL";
         boolean isPassDetermined = false;
         if (examVersion.getExamCriteriaId() != null) {
