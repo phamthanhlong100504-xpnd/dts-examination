@@ -18,6 +18,7 @@ public class QuestionPaperResponse {
     private Map<String, Object> display;
     private String content;
     private String type;
+    private String imageUrl;
     private List<OptionPaperResponse> options;
     private Map<String, Object> selectedAnswer;
 }

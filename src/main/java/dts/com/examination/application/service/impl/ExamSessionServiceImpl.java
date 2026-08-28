@@ -278,11 +278,17 @@ public class ExamSessionServiceImpl implements ExamSessionService {
                         .collect(Collectors.toList());
             }
 
+            String imageUrl = null;
+            if (qDetail.getMediaFileIds() != null && !qDetail.getMediaFileIds().isEmpty()) {
+                imageUrl = qDetail.getMediaFileIds().get(0);
+            }
+
             return dts.com.examination.api.response.QuestionPaperResponse.builder()
                     .questionId(ans.getQuestionId())
                     .display(ans.getDisplaySnapshot())
                     .content(qDetail.getContent())
                     .type(qDetail.getType())
+                    .imageUrl(imageUrl)
                     .options(options)
                     .selectedAnswer(ans.getSelectedAnswer())
                     .build();
