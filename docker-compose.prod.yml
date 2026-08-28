@@ -11,7 +11,9 @@ services:
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: "K59Ptl*100504"
       EUREKA_URI: "http://eureka-server:8761/eureka/"
-      KAFKA_BOOTSTRAP_SERVERS: "hoangcn.com:9092"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
+    extra_hosts:
+      - "kafka:172.20.0.1"
     networks: [dts-network]
 
 networks:
