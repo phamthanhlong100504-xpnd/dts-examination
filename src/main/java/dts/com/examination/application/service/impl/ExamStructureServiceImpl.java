@@ -69,10 +69,6 @@ public class ExamStructureServiceImpl implements ExamStructureService {
     public ExamStructureResponse update(UUID structureId, UpdateExamStructureRequest request, UUID currentUserId) {
         ExamStructure entity = getExamStructureOrThrow(structureId);
 
-        if (!entity.getCreatedBy().equals(currentUserId)) {
-            throw new AccessDeniedException("You do not have permission to modify this exam structure.");
-        }
-
         if (examVersionRepository.existsByExamStructureIdAndStatus(structureId, "PUBLISHED")) {
             throw new BusinessRuleException("Cannot modify an exam structure that is in use by a PUBLISHED exam version.");
         }
@@ -102,10 +98,6 @@ public class ExamStructureServiceImpl implements ExamStructureService {
     @Transactional
     public void delete(UUID structureId, UUID currentUserId) {
         ExamStructure entity = getExamStructureOrThrow(structureId);
-
-        if (!entity.getCreatedBy().equals(currentUserId)) {
-            throw new AccessDeniedException("You do not have permission to delete this exam structure.");
-        }
 
         if (examVersionRepository.existsByExamStructureIdAndDeletedAtIsNull(structureId)) {
             throw new BusinessRuleException("Cannot delete an exam structure that is referenced by exam versions.");
