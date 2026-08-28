@@ -514,7 +514,7 @@ public class ExamSessionServiceImpl implements ExamSessionService {
         ExamRule examRule = examRuleRepository.findById(examVersion.getExamRuleId())
                 .orElseThrow(() -> new BusinessRuleException("Exam rule not found"));
 
-        if (!"IMMEDIATE".equals(examRule.getResultReleaseMode())) {
+        if (!"IMMEDIATE".equals(examRule.getResultReleaseMode()) && !"IMMEDIATELY".equals(examRule.getResultReleaseMode())) {
             throw new BusinessRuleException("Result is hidden until exam period ends");
         }
 
