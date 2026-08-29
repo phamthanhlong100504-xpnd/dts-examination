@@ -221,7 +221,7 @@ class ExamSessionShuffleAndCriticalTest {
             questionsMetadata.add(Map.of(
                     "id", UUID.randomUUID(),
                     "chapter", 1,
-                    "optionIds", List.of("A", "B", "C", "D")
+                    "optionIds", new ArrayList<>(List.of("A", "B", "C", "D"))
             ));
         }
 
