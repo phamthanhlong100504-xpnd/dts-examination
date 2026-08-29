@@ -310,7 +310,13 @@ class ExamSessionShuffleAndCriticalTest {
         ExamSessionResponse response = examSessionService.startSession(request, userId);
 
         // Assert
-        verify(examSessionAnswerRepository).saveAll(argThat(answers -> answers.size() == 25));
+        verify(examSessionAnswerRepository).saveAll(argThat(answers -> {
+            int count = 0;
+            for (Object ignored : answers) {
+                count++;
+            }
+            return count == 25;
+        }));
     }
 
     // ==================== TRAP QUESTION (CRITICAL QUESTION) DETECTION TESTS ====================
