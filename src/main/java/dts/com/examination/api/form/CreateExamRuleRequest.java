@@ -80,7 +80,7 @@ public class CreateExamRuleRequest {
     private Boolean shuffleOptions;
 
     @NotNull(message = "resultReleaseMode must not be null")
-    @Pattern(regexp = "IMMEDIATE|AFTER_SUBMIT|AFTER_EXAM_END|MANUAL", message = "resultReleaseMode must be IMMEDIATE, AFTER_SUBMIT, AFTER_EXAM_END, or MANUAL")
+    @Pattern(regexp = "IMMEDIATE|IMMEDIATELY|AFTER_SUBMIT|AFTER_EXAM_END|MANUAL", message = "resultReleaseMode must be IMMEDIATE, IMMEDIATELY, AFTER_SUBMIT, AFTER_EXAM_END, or MANUAL")
     private String resultReleaseMode;
 
     @NotNull(message = "showAnswerAfterSubmit must not be null")

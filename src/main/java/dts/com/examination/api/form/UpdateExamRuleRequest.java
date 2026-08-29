@@ -58,7 +58,7 @@ public class UpdateExamRuleRequest {
 
     private Boolean shuffleOptions;
 
-    @Pattern(regexp = "IMMEDIATE|AFTER_SUBMIT|AFTER_EXAM_END|MANUAL", message = "resultReleaseMode must be IMMEDIATE, AFTER_SUBMIT, AFTER_EXAM_END, or MANUAL")
+    @Pattern(regexp = "IMMEDIATE|IMMEDIATELY|AFTER_SUBMIT|AFTER_EXAM_END|MANUAL", message = "resultReleaseMode must be IMMEDIATE, IMMEDIATELY, AFTER_SUBMIT, AFTER_EXAM_END, or MANUAL")
     private String resultReleaseMode;
 
     private Boolean showAnswerAfterSubmit;
