@@ -72,12 +72,11 @@ public class ExamSessionServiceImpl implements ExamSessionService {
                 .orElseThrow(() -> new BusinessRuleException("Exam rule not found"));
 
         int attemptCount = examSessionRepository.countByExamVersionIdAndUserId(examVersion.getId(), userId);
-        // TẠM THỜI COMMENT ĐỂ TEST ĐƯỢC NHIỀU LẦN
-        // if (!examRule.isAllowRetry() && attemptCount >= 1) {
-        //      throw new BusinessRuleException("Retries are not allowed");
-        // } else if (examRule.isAllowRetry() && examRule.getMaxRetry() > 0 && attemptCount >= examRule.getMaxRetry()) {
-        //     throw new BusinessRuleException("Maximum attempts exceeded");
-        // }
+        if (!examRule.isAllowRetry() && attemptCount >= 1) {
+             throw new BusinessRuleException("Retries are not allowed");
+        } else if (examRule.isAllowRetry() && examRule.getMaxRetry() > 0 && attemptCount >= (examRule.getMaxRetry() + 1)) {
+             throw new BusinessRuleException("Maximum attempts exceeded");
+        }
 
         // Check for existing IN_PROGRESS session (if parallel attempts not allowed)
         java.util.Optional<ExamSession> activeSessionOpt = examSessionRepository.findFirstByExamVersionIdAndUserIdAndStatus(examVersion.getId(), userId, "IN_PROGRESS");
