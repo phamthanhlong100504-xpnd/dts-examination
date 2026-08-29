@@ -87,6 +87,16 @@ public class ExamSessionController {
         dts.com.examination.api.response.ExamResultResponse response = examSessionService.getExamResult(sessionId, userId);
         return ResponseEntity.ok(response);
     }
+
+    @GetMapping("/{sessionId}/review")
+    // @PreAuthorize("hasAuthority('PERM_exam_session:read')")
+    public ResponseEntity<dts.com.examination.api.response.ExamReviewResponse> getExamReview(
+            @PathVariable UUID sessionId,
+            Principal principal) {
+        UUID userId = UUID.fromString(principal.getName());
+        dts.com.examination.api.response.ExamReviewResponse response = examSessionService.getExamSessionReview(sessionId, userId);
+        return ResponseEntity.ok(response);
+    }
     @GetMapping("/{sessionId}/progress")
     // @PreAuthorize("hasAuthority('PERM_exam_session:read')")
     public ResponseEntity<dts.com.examination.api.response.SessionProgressResponse> getSessionProgress(

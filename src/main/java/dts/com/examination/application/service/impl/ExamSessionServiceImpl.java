@@ -303,6 +303,93 @@ public class ExamSessionServiceImpl implements ExamSessionService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public dts.com.examination.api.response.ExamReviewResponse getExamSessionReview(UUID sessionId, UUID userId) {
+        ExamSession session = examSessionRepository.findById(sessionId)
+                .orElseThrow(() -> new BusinessRuleException("Exam session not found"));
+
+        if (!session.getUserId().equals(userId)) {
+            throw new org.springframework.security.access.AccessDeniedException("Access denied");
+        }
+
+        if (!"SUBMITTED".equals(session.getStatus())) {
+            throw new BusinessRuleException("Cannot get review for this session state");
+        }
+
+        List<ExamSessionAnswer> answers = examSessionAnswerRepository.findByExamSessionId(sessionId);
+        answers.sort((a, b) -> {
+            Integer posA = a.getDisplaySnapshot() != null ? (Integer) a.getDisplaySnapshot().get("position") : 0;
+            Integer posB = b.getDisplaySnapshot() != null ? (Integer) b.getDisplaySnapshot().get("position") : 0;
+            if (posA == null) posA = 0;
+            if (posB == null) posB = 0;
+            return posA.compareTo(posB);
+        });
+
+        List<UUID> questionIds = answers.stream().map(ExamSessionAnswer::getQuestionId).collect(Collectors.toList());
+        List<dts.com.examination.api.response.InternalQuestionDetailResponse> questionsBatch = contentBuilderClient.getQuestionsBatch(questionIds);
+        Map<UUID, dts.com.examination.api.response.InternalQuestionDetailResponse> questionMap = questionsBatch.stream()
+                .collect(Collectors.toMap(dts.com.examination.api.response.InternalQuestionDetailResponse::getId, q -> q));
+
+        List<dts.com.examination.api.response.QuestionReviewResponse> reviewQuestions = answers.stream().map(ans -> {
+            dts.com.examination.api.response.InternalQuestionDetailResponse qDetail = questionMap.get(ans.getQuestionId());
+            if (qDetail == null) return null;
+
+            List<dts.com.examination.api.response.OptionReviewResponse> options = new ArrayList<>();
+            if (ans.getDisplaySnapshot() != null && ans.getDisplaySnapshot().containsKey("optionOrder")) {
+                List<String> optionOrder = (List<String>) ans.getDisplaySnapshot().get("optionOrder");
+                Map<UUID, dts.com.examination.api.response.InternalQuestionOptionResponse> optMap = qDetail.getOptions().stream()
+                        .collect(Collectors.toMap(dts.com.examination.api.response.InternalQuestionOptionResponse::getId, o -> o));
+                
+                for (String optIdStr : optionOrder) {
+                    UUID optId = UUID.fromString(optIdStr);
+                    dts.com.examination.api.response.InternalQuestionOptionResponse optDetail = optMap.get(optId);
+                    if (optDetail != null) {
+                        options.add(new dts.com.examination.api.response.OptionReviewResponse(optDetail.getId(), optDetail.getContent(), optDetail.getSortOrder(), optDetail.getIsCorrect()));
+                    }
+                }
+            } else {
+                options = qDetail.getOptions().stream()
+                        .map(o -> new dts.com.examination.api.response.OptionReviewResponse(o.getId(), o.getContent(), o.getSortOrder(), o.getIsCorrect()))
+                        .collect(Collectors.toList());
+            }
+
+            return dts.com.examination.api.response.QuestionReviewResponse.builder()
+                    .id(qDetail.getId())
+                    .content(qDetail.getContent())
+                    .type(qDetail.getType())
+                    .mediaFileIds(qDetail.getMediaFileIds())
+                    .options(options)
+                    .userAnswer(ans.getSelectedAnswer())
+                    .isCorrect(ans.getIsCorrect())
+                    .build();
+        }).filter(java.util.Objects::nonNull).collect(Collectors.toList());
+
+        java.math.BigDecimal totalScore = java.math.BigDecimal.ZERO;
+        int correctCount = 0;
+        
+        if (session.getMetadata() != null) {
+            totalScore = new java.math.BigDecimal(session.getMetadata().getOrDefault("totalScore", "0").toString());
+            correctCount = (Integer) session.getMetadata().getOrDefault("correctCount", 0);
+        }
+
+        String finalResult = "SUBMITTED";
+        if (session.getMetadata() != null && session.getMetadata().containsKey("finalResult")) {
+            finalResult = (String) session.getMetadata().get("finalResult");
+        }
+
+        return dts.com.examination.api.response.ExamReviewResponse.builder()
+                .sessionId(session.getId())
+                .examId(session.getExamVersionId()) // Should be examVersionId?
+                .examVersionId(session.getExamVersionId())
+                .finalResult(finalResult)
+                .score(totalScore)
+                .correctCount(correctCount)
+                .totalQuestions(answers.size())
+                .questions(reviewQuestions)
+                .build();
+    }
+
+    @Override
     @Transactional
     public dts.com.examination.api.response.SaveAnswersResponse saveAnswers(UUID sessionId, dts.com.examination.api.form.SaveAnswersRequest request, UUID userId) {
         ExamSession session = examSessionRepository.findById(sessionId)

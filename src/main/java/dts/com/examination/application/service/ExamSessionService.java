@@ -17,6 +17,8 @@ public interface ExamSessionService {
     ExamSessionDetailResponse getSessionDetail(UUID sessionId, UUID userId);
     
     dts.com.examination.api.response.ExamPaperResponse getExamPaper(UUID sessionId, UUID userId);
+    
+    dts.com.examination.api.response.ExamReviewResponse getExamSessionReview(UUID sessionId, UUID userId);
 
     dts.com.examination.api.response.SaveAnswersResponse saveAnswers(UUID sessionId, dts.com.examination.api.form.SaveAnswersRequest request, UUID userId);
 
