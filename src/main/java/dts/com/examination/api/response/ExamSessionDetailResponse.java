@@ -23,4 +23,5 @@ public class ExamSessionDetailResponse {
     private Long remainingSeconds;
     private Long answeredQuestions;
     private Long totalQuestions;
+    private ExamRuleResponse examRule;
 }

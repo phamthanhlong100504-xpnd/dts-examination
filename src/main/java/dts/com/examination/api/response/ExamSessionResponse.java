@@ -22,4 +22,5 @@ public class ExamSessionResponse {
     private Instant startedAt;
     private Instant expiredAt;
     private Integer durationSeconds;
+    private ExamRuleResponse examRule;
 }

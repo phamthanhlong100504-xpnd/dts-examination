@@ -194,6 +194,24 @@ public class ExamSessionServiceImpl implements ExamSessionService {
         long totalQuestions = examSessionAnswerRepository.countByExamSessionId(sessionId);
         long answeredQuestions = examSessionAnswerRepository.countByExamSessionIdAndSelectedAnswerIsNotNull(sessionId);
 
+        dts.com.examination.api.response.ExamRuleResponse ruleResponse = null;
+        if (session.getExamVersionId() != null) {
+            java.util.Optional<dts.com.examination.domain.entity.ExamVersion> examVersionOpt = examVersionRepository.findById(session.getExamVersionId());
+            if (examVersionOpt.isPresent() && examVersionOpt.get().getExamRuleId() != null) {
+                java.util.Optional<dts.com.examination.domain.entity.ExamRule> ruleOpt = examRuleRepository.findById(examVersionOpt.get().getExamRuleId());
+                if (ruleOpt.isPresent()) {
+                    dts.com.examination.domain.entity.ExamRule rule = ruleOpt.get();
+                    ruleResponse = dts.com.examination.api.response.ExamRuleResponse.builder()
+                            .id(rule.getId())
+                            .title(rule.getTitle())
+                            .requireFullscreen(rule.isRequireFullscreen())
+                            .preventTabSwitch(rule.isPreventTabSwitch())
+                            .maxTabSwitchCount(rule.getMaxTabSwitchCount())
+                            .build();
+                }
+            }
+        }
+
         return dts.com.examination.api.response.ExamSessionDetailResponse.builder()
                 .sessionId(session.getId())
                 .examVersionId(session.getExamVersionId())
@@ -205,6 +223,7 @@ public class ExamSessionServiceImpl implements ExamSessionService {
                 .remainingSeconds(remainingSeconds)
                 .answeredQuestions(answeredQuestions)
                 .totalQuestions(totalQuestions)
+                .examRule(ruleResponse)
                 .build();
     }
 
