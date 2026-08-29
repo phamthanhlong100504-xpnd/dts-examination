@@ -35,3 +35,7 @@ out/
 
 ### VS Code ###
 .vscode/
+
+### AI skill / local tooling ###
+.claude/
+.agents/
