@@ -7,10 +7,10 @@ services:
     mem_limit: 275m
     environment:
       JAVA_TOOL_OPTIONS: "-Xms64m -Xmx128m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m -Xss256k"
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/examination
+      SPRING_DATASOURCE_URL: jdbc:postgresql://103.20.96.85:5434/examination
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: "K59Ptl*100504"
-      EUREKA_URI: "http://eureka-server:8761/eureka/"
+      EUREKA_URI: "http://103.20.96.85:8761/eureka/"
       KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
     extra_hosts:
       - "kafka:172.20.0.1"
