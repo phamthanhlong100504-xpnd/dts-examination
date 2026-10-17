@@ -39,3 +39,19 @@ out/
 ### AI skill / local tooling ###
 .claude/
 .agents/
+
+# DTS local generated files and development backups
+/bin/
+/handoff/
+*.screen12-*.bak
+/hs_err_pid*.log
+/replay_pid*.log
+
+# Private local environment and generated handoffs/diagnostics.
+.env
+.env.*
+!.env.example
+/_local/
+/scratch/
+__pycache__/
+*.py[cod]
