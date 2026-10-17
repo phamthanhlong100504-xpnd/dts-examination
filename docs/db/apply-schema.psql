@@ -1,0 +1,97 @@
+-- Canonical entrypoint. psql -X -v ON_ERROR_STOP=1 -v expected_database=NAME -f docs/db/apply-schema.psql
+-- Check schema-manifest.json hashes with the supplied runner before applying.
+\set ON_ERROR_STOP on
+\if :{?expected_database}
+\else
+\set expected_database examination
+\endif
+BEGIN;
+SET LOCAL lock_timeout='5s';
+SET LOCAL statement_timeout='120s';
+SET LOCAL search_path=public,pg_catalog;
+SELECT set_config('dts.expected_database', :'expected_database', true);
+DO $body$
+BEGIN
+ IF current_database()<>current_setting('dts.expected_database') THEN
+   RAISE EXCEPTION 'Wrong target database; no migration accepted';
+ END IF;
+ IF current_setting('server_version_num')::integer<130000 THEN
+   RAISE EXCEPTION 'PostgreSQL 13 or later is required';
+ END IF;
+END;
+$body$;
+SELECT pg_advisory_xact_lock(12002612);
+CREATE TABLE IF NOT EXISTS public.dts_examination_schema_history(
+ version varchar(20) PRIMARY KEY,
+ script varchar(255) NOT NULL,
+ checksum char(64) NOT NULL,
+ applied_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+SELECT set_config('dts.migration_checksum','08B91F19BC00DC26E1186873F2BF483AC5FD0E028F24D42BAF94C6D52FA7BB71',true);
+DO $body$
+BEGIN
+ IF EXISTS(SELECT 1 FROM public.dts_examination_schema_history WHERE version='V001'
+   AND (checksum<>current_setting('dts.migration_checksum') OR script<>'V001__baseline_entity_schema.sql')) THEN
+   RAISE EXCEPTION 'Executed migration V001 differs from this version; do not edit migration history';
+ END IF;
+END;
+$body$;
+SELECT NOT EXISTS(SELECT 1 FROM public.dts_examination_schema_history WHERE version='V001') AS apply_v001 \gset
+\if :apply_v001
+\ir migrations/V001__baseline_entity_schema.sql
+INSERT INTO public.dts_examination_schema_history(version,script,checksum)
+ VALUES('V001','V001__baseline_entity_schema.sql','08B91F19BC00DC26E1186873F2BF483AC5FD0E028F24D42BAF94C6D52FA7BB71');
+\endif
+
+SELECT set_config('dts.migration_checksum','508B9AA21F2657C07CF9D66F8071D9C0738E12B552EFD2F580700199B953FC4C',true);
+DO $body$
+BEGIN
+ IF EXISTS(SELECT 1 FROM public.dts_examination_schema_history WHERE version='V002'
+   AND (checksum<>current_setting('dts.migration_checksum') OR script<>'V002__screen12_contract_integrity.sql')) THEN
+   RAISE EXCEPTION 'Executed migration V002 differs from this version; do not edit migration history';
+ END IF;
+END;
+$body$;
+SELECT NOT EXISTS(SELECT 1 FROM public.dts_examination_schema_history WHERE version='V002') AS apply_v002 \gset
+\if :apply_v002
+\ir migrations/V002__screen12_contract_integrity.sql
+INSERT INTO public.dts_examination_schema_history(version,script,checksum)
+ VALUES('V002','V002__screen12_contract_integrity.sql','508B9AA21F2657C07CF9D66F8071D9C0738E12B552EFD2F580700199B953FC4C');
+\endif
+
+SELECT set_config('dts.migration_checksum','C8869C6E5F4551E0DD4513223154A767E578D0A312D56360BE68D5A96C7A4618',true);
+DO $body$
+BEGIN
+ IF EXISTS(SELECT 1 FROM public.dts_examination_schema_history WHERE version='V003'
+   AND (checksum<>current_setting('dts.migration_checksum') OR script<>'V003__structure_draft_default.sql')) THEN
+   RAISE EXCEPTION 'Executed migration V003 differs from this version; do not edit migration history';
+ END IF;
+END;
+$body$;
+SELECT NOT EXISTS(SELECT 1 FROM public.dts_examination_schema_history WHERE version='V003') AS apply_v003 \gset
+\if :apply_v003
+\ir migrations/V003__structure_draft_default.sql
+INSERT INTO public.dts_examination_schema_history(version,script,checksum)
+ VALUES('V003','V003__structure_draft_default.sql','C8869C6E5F4551E0DD4513223154A767E578D0A312D56360BE68D5A96C7A4618');
+\endif
+
+SELECT set_config('dts.migration_checksum','03A73FD6DA2B2AA3CC03371097A1E0EA7B527F9B4D75CBB55931087559AFE64F',true);
+DO $body$
+BEGIN
+ IF EXISTS(SELECT 1 FROM public.dts_examination_schema_history WHERE version='V004'
+   AND (checksum<>current_setting('dts.migration_checksum') OR script<>'V004__screen13_result_history_indexes.sql')) THEN
+   RAISE EXCEPTION 'Executed migration V004 differs from this version; do not edit migration history';
+ END IF;
+END;
+$body$;
+SELECT NOT EXISTS(SELECT 1 FROM public.dts_examination_schema_history WHERE version='V004') AS apply_v004 \gset
+\if :apply_v004
+\ir migrations/V004__screen13_result_history_indexes.sql
+INSERT INTO public.dts_examination_schema_history(version,script,checksum)
+ VALUES('V004','V004__screen13_result_history_indexes.sql','03A73FD6DA2B2AA3CC03371097A1E0EA7B527F9B4D75CBB55931087559AFE64F');
+\endif
+
+\ir verify-schema.sql
+COMMIT;
+SELECT json_build_object('database',current_database(),'service','dts-examination','schema_versions',(SELECT count(*) FROM public.dts_examination_schema_history),'schema_verified',true);

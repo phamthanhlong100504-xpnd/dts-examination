@@ -1,3 +1,5 @@
+-- Reference DDL for a NEW database; use apply-schema.psql for managed fresh/existing migrations.
+-- Load 00_trigger_functions.sql before these standalone reference files.
 -- Table: exam_structures
 -- Service: examination
 -- Entities mapped: ExamStructure
@@ -14,7 +16,7 @@ CREATE TABLE exam_structures (
     updated_by      UUID            NULL,                                   -- Reference to the identity service for the last updater user. NULL if never updated.
     title           VARCHAR(255)    NOT NULL,                               -- Title of the exam structure
     sections        JSONB           NOT NULL    DEFAULT '[]'::jsonb,        -- JSON array defining the sections and layout of the exam
-    status          VARCHAR(30)     NOT NULL    DEFAULT 'ACTIVE',           -- Status of the structure (e.g., ACTIVE, INACTIVE)
+    status          VARCHAR(30)     NOT NULL    DEFAULT 'DRAFT',           -- Status of the structure (e.g., ACTIVE, INACTIVE)
     metadata        JSONB           NOT NULL    DEFAULT '{}'::jsonb,        -- Extensible metadata for the exam structure
     created_at      TIMESTAMPTZ     NOT NULL    DEFAULT CURRENT_TIMESTAMP,  -- Timestamp when the record was created
     updated_at      TIMESTAMPTZ     NOT NULL    DEFAULT CURRENT_TIMESTAMP,  -- Timestamp when the record was last updated
@@ -23,7 +25,7 @@ CREATE TABLE exam_structures (
 
 ALTER TABLE exam_structures
     ADD CONSTRAINT pk_exam_structures PRIMARY KEY (id),
-    ADD CONSTRAINT ck_exam_structures_status CHECK (status IN ('ACTIVE', 'INACTIVE'));
+    ADD CONSTRAINT ck_exam_structures_status CHECK (status IN ('DRAFT', 'ACTIVE', 'PUBLISHED', 'ARCHIVED', 'INACTIVE'));
 
 COMMENT ON COLUMN exam_structures.id IS 'Primary key for the exam structure';
 COMMENT ON COLUMN exam_structures.created_by IS 'Reference to the identity service for the creator user';
@@ -42,4 +44,4 @@ CREATE INDEX ix_exam_structures_status ON exam_structures (status) WHERE deleted
 CREATE TRIGGER trg_exam_structures_updated_at
     BEFORE UPDATE ON exam_structures
     FOR EACH ROW
-    EXECUTE FUNCTION trigger_set_updated_at();
+    EXECUTE FUNCTION dts_examination_set_updated_at();

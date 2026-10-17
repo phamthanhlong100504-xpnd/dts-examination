@@ -1,3 +1,5 @@
+-- Reference DDL for a NEW database; use apply-schema.psql for managed fresh/existing migrations.
+-- Load 00_trigger_functions.sql before these standalone reference files.
 -- Table: exam_sessions
 -- Service: examination
 -- Entities mapped: ExamSession
@@ -14,7 +16,7 @@ CREATE TABLE exam_sessions (
     user_id             UUID            NOT NULL,                               -- Reference to the identity service for the candidate taking the exam
     device_id           UUID            NULL,                                   -- Optional reference to the device service or a unique device identifier for tracking
     session_token       UUID            NOT NULL,                               -- Unique secure token used by the client for this specific session
-    created_by          UUID            NOT NULL,                               -- Reference to the identity service for the creator user
+    created_by          UUID            NULL,                               -- Reference to the identity service for the creator user
     updated_by          UUID            NULL,                                   -- Reference to the identity service for the last updater user. NULL if never updated.
     attempt_no          INT             NOT NULL    DEFAULT 1,                  -- The attempt number for this user and exam
     duration_seconds    INT             NULL,                                   -- Actual time spent on the exam in seconds (populated upon completion)
@@ -73,9 +75,10 @@ CREATE INDEX ix_exam_sessions_status ON exam_sessions (status) WHERE deleted_at 
 CREATE UNIQUE INDEX uq_exam_sessions_session_token ON exam_sessions (session_token);
 
 -- Unique index to enforce idempotency constraints for submission
-CREATE UNIQUE INDEX uq_exam_sessions_idempotency_key ON exam_sessions (idempotency_key) WHERE idempotency_key IS NOT NULL;
+-- Submission idempotency belongs to one locked session; keys may repeat across sessions.
+CREATE INDEX ix_exam_sessions_idempotency_key ON exam_sessions (idempotency_key) WHERE idempotency_key IS NOT NULL;
 
 CREATE TRIGGER trg_exam_sessions_updated_at
     BEFORE UPDATE ON exam_sessions
     FOR EACH ROW
-    EXECUTE FUNCTION trigger_set_updated_at();
+    EXECUTE FUNCTION dts_examination_set_updated_at();

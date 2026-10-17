@@ -1,3 +1,5 @@
+-- Reference DDL for a NEW database; use apply-schema.psql for managed fresh/existing migrations.
+-- Load 00_trigger_functions.sql before these standalone reference files.
 -- Table: exam_rules
 -- Service: examination
 -- Entities mapped: ExamRule
@@ -10,7 +12,7 @@
 
 CREATE TABLE exam_rules (
     id                                  UUID            NOT NULL    DEFAULT gen_random_uuid(),  -- Primary key for the exam rule
-    created_by                          UUID            NOT NULL,                               -- Reference to the identity service for the creator user
+    created_by                          UUID            NULL,                               -- Reference to the identity service for the creator user
     updated_by                          UUID            NULL,                                   -- Reference to the identity service for the last updater user. NULL if never updated.
     title                               VARCHAR(255)    NOT NULL,                               -- Unique title for the exam rule
     allow_retry                         BOOLEAN         NOT NULL    DEFAULT false,              -- Whether retaking the exam is allowed
@@ -40,7 +42,7 @@ CREATE TABLE exam_rules (
     max_tab_switch_count                INT             NOT NULL    DEFAULT 0,                  -- Maximum allowed tab switches before action is taken
     time_zone                           VARCHAR(100)    NULL,                                   -- IANA time zone for the exam. NULL means server default.
     status                              VARCHAR(30)     NOT NULL    DEFAULT 'ACTIVE',           -- Status of the rule: ACTIVE, INACTIVE
-    metadata                            JSONB           NOT NULL    DEFAULT '{}'::jsonb,        -- Extensible metadata for the exam rule
+    metadata                            JSONB           NULL    DEFAULT '{}'::jsonb,        -- Extensible metadata for the exam rule
     created_at                          TIMESTAMPTZ     NOT NULL    DEFAULT CURRENT_TIMESTAMP,  -- Timestamp when the record was created
     updated_at                          TIMESTAMPTZ     NOT NULL    DEFAULT CURRENT_TIMESTAMP,  -- Timestamp when the record was last updated
     deleted_at                          TIMESTAMPTZ     NULL                                    -- Soft delete timestamp. NULL means not deleted.
@@ -108,4 +110,4 @@ CREATE INDEX ix_exam_rules_title ON exam_rules (title) WHERE deleted_at IS NULL;
 CREATE TRIGGER trg_exam_rules_updated_at
     BEFORE UPDATE ON exam_rules
     FOR EACH ROW
-    EXECUTE FUNCTION trigger_set_updated_at();
+    EXECUTE FUNCTION dts_examination_set_updated_at();

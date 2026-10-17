@@ -1,3 +1,5 @@
+-- Reference DDL for a NEW database; use apply-schema.psql for managed fresh/existing migrations.
+-- Load 00_trigger_functions.sql before these standalone reference files.
 -- Table: exam_versions
 -- Service: examination
 -- Entities mapped: ExamVersion
@@ -13,10 +15,10 @@ CREATE TABLE exam_versions (
     exam_id             UUID            NOT NULL,                               -- Reference to the parent exams table
     exam_structure_id   UUID            NOT NULL,                               -- Reference to the exam_structures table for the layout of this version
     exam_rule_id        UUID            NOT NULL,                               -- Reference to the exam_rules table for the rules applied to this version
-    exam_criteria_id    UUID            NULL,                                   -- Reference to the exam_criteria table for grading. NULL if not applicable.
+    exam_criteria_id    UUID            NULL,                                   -- Reference to the exam_criterias table for grading. NULL if not applicable.
     thumbnail_id        UUID            NULL,                                   -- Reference to the media service for the exam thumbnail. NULL means no thumbnail.
     content_id          UUID            NOT NULL,                               -- Reference to the core content entity (Question, Chapter, etc.)
-    created_by          UUID            NOT NULL,                               -- Reference to the identity service for the creator user
+    created_by          UUID            NULL,                               -- Reference to the identity service for the creator user
     updated_by          UUID            NULL,                                   -- Reference to the identity service for the last updater user. NULL if never updated.
     version_no          INT             NOT NULL    DEFAULT 1,                  -- Sequential version number of the exam
     title               VARCHAR(255)    NOT NULL,                               -- Title of this specific version
@@ -35,14 +37,14 @@ CREATE TABLE exam_versions (
 ALTER TABLE exam_versions
     ADD CONSTRAINT pk_exam_versions PRIMARY KEY (id),
     ADD CONSTRAINT ck_exam_versions_version_no CHECK (version_no > 0),
-    ADD CONSTRAINT ck_exam_versions_content_type CHECK (content_type IN ('QUESTION', 'QUESTION_BLOCK', 'CHAPTER', 'LEARNING_PROGRAM')),
+    ADD CONSTRAINT ck_exam_versions_content_type CHECK (content_type IN ('QUESTION', 'QUESTION_BLOCK', 'CHAPTER', 'LEARNING_PROGRAM', 'BANK_VERSION')),
     ADD CONSTRAINT ck_exam_versions_status CHECK (status IN ('DRAFT', 'PUBLISHED', 'ARCHIVED', 'HIDDEN'));
 
 COMMENT ON COLUMN exam_versions.id IS 'Primary key for the exam version';
 COMMENT ON COLUMN exam_versions.exam_id IS 'Reference to the parent exams table';
 COMMENT ON COLUMN exam_versions.exam_structure_id IS 'Reference to the exam_structures table for the layout of this version';
 COMMENT ON COLUMN exam_versions.exam_rule_id IS 'Reference to the exam_rules table for the rules applied to this version';
-COMMENT ON COLUMN exam_versions.exam_criteria_id IS 'Reference to the exam_criteria table for grading. NULL if not applicable.';
+COMMENT ON COLUMN exam_versions.exam_criteria_id IS 'Reference to the exam_criterias table for grading. NULL if not applicable.';
 COMMENT ON COLUMN exam_versions.thumbnail_id IS 'Reference to the media service for the exam thumbnail. NULL means no thumbnail.';
 COMMENT ON COLUMN exam_versions.content_id IS 'Reference to the core content entity (Question, Chapter, etc.)';
 COMMENT ON COLUMN exam_versions.created_by IS 'Reference to the identity service for the creator user';
@@ -69,4 +71,4 @@ CREATE INDEX ix_exam_versions_status ON exam_versions (status) WHERE deleted_at 
 CREATE TRIGGER trg_exam_versions_updated_at
     BEFORE UPDATE ON exam_versions
     FOR EACH ROW
-    EXECUTE FUNCTION trigger_set_updated_at();
+    EXECUTE FUNCTION dts_examination_set_updated_at();

@@ -1,0 +1,169 @@
+{
+  "Service": "dts-examination",
+  "DefaultDatabase": "examination",
+  "HistoryTable": "dts_examination_schema_history",
+  "RequiredTables": [
+    "exams",
+    "exam_structures",
+    "exam_criterias",
+    "exam_rules",
+    "exam_versions",
+    "exam_sessions",
+    "exam_session_answers"
+  ],
+  "Files": [
+    {
+      "Path": "docs/db/00_trigger_functions.sql",
+      "SHA256": "2C1457C8E6C9159E30FA26A66BF51AF172B0DD31C7F98B1450B0131F09987034"
+    },
+    {
+      "Path": "docs/db/SCREEN12_SCHEMA.md",
+      "SHA256": "E66A9472CD673A7A2126974986B528156CF052B773367886941D997ED53B7B1B"
+    },
+    {
+      "Path": "docs/db/apply-schema.psql",
+      "SHA256": "DF5A4C92532E2F857B2AE24050C0B0204DF229D9BE8D52D0FCCD811807966A67"
+    },
+    {
+      "Path": "docs/db/exam_criteria.sql",
+      "SHA256": "45E0033FC05C8BB76B23211BCD52E22EDC342130F0B8E5B15831F56F56F0DAD6"
+    },
+    {
+      "Path": "docs/db/exam_rules.sql",
+      "SHA256": "A358F97C843097125A4C4A7D77C22658E2C0F84DBE3ED31AAC500462E3106232"
+    },
+    {
+      "Path": "docs/db/exam_session_answers.sql",
+      "SHA256": "70D07D26FA1D8BAC0519BFDB3CB6FAB0215E313C066C8610AC2F054091C71550"
+    },
+    {
+      "Path": "docs/db/exam_sessions.sql",
+      "SHA256": "4AD9F74C47099449D61C739093C38C9115A7EB5CE0BF2546FBC65A4DC49A866F"
+    },
+    {
+      "Path": "docs/db/exam_structures.sql",
+      "SHA256": "9F46334C27990A7C58C263084E728996BCB0378FAC656C1E942CE1B3B30C2524"
+    },
+    {
+      "Path": "docs/db/exam_versions.sql",
+      "SHA256": "72D4FD70D9AA404A3D106D0576DF2AB80E8B9557E110C76CB837D96174793BC9"
+    },
+    {
+      "Path": "docs/db/exams.sql",
+      "SHA256": "48E9264CACB01AE5474F1A6AEE04EF59AAC1DA0C06C509EDFEDF27B4206523E0"
+    },
+    {
+      "Path": "docs/db/migrations/V001__baseline_entity_schema.sql",
+      "SHA256": "08B91F19BC00DC26E1186873F2BF483AC5FD0E028F24D42BAF94C6D52FA7BB71"
+    },
+    {
+      "Path": "docs/db/migrations/V002__screen12_contract_integrity.sql",
+      "SHA256": "508B9AA21F2657C07CF9D66F8071D9C0738E12B552EFD2F580700199B953FC4C"
+    },
+    {
+      "Path": "docs/db/migrations/V003__structure_draft_default.sql",
+      "SHA256": "C8869C6E5F4551E0DD4513223154A767E578D0A312D56360BE68D5A96C7A4618"
+    },
+    {
+      "Path": "docs/db/tests/checksum-fixture.sql",
+      "SHA256": "AB5A38F7364E58F2715D2B8A571D60767E22C881B912D9862CD0E6A0A4F8E8D2"
+    },
+    {
+      "Path": "docs/db/tests/invalid-legacy-fixture.sql",
+      "SHA256": "168221AE26B55454C9E9E6D419FC1A72F16CC48C629418D5CA7BF99B54E6A52B"
+    },
+    {
+      "Path": "docs/db/tests/jpa-criteria-fixture.sql",
+      "SHA256": "0C3CAC32645A199391CDE943058A88433A0276FFD9FE083860099E65CE462ADE"
+    },
+    {
+      "Path": "docs/db/tests/legacy-fixture.sql",
+      "SHA256": "5C295EF8568D938AB2F73C936CD594306BE2E023282D012E65C37C68F48EB8ED"
+    },
+    {
+      "Path": "docs/db/tests/schema-smoke.sql",
+      "SHA256": "A28710B1B06162A827D22C82A86B1224801E85566558A5D4294126D36C476C72"
+    },
+    {
+      "Path": "docs/db/tests/v002-default-fixture.sql",
+      "SHA256": "953BDA0E99A713351B78A0FF186B0F36F0FB39441B33DF778DB553F0701EF919"
+    },
+    {
+      "Path": "docs/db/tests/verify-checksum-refusal.sql",
+      "SHA256": "3A63FB38DDAAD3F2E3686F12A2BA68E7F08EB634DFA7D3CA581C9ED73D52FFAB"
+    },
+    {
+      "Path": "docs/db/tests/verify-jpa-criteria.sql",
+      "SHA256": "1266FECC5284FF8C3ED986176C9B31F7C38A14004FAEDA5AC123DF7512A0A763"
+    },
+    {
+      "Path": "docs/db/tests/verify-preserved.sql",
+      "SHA256": "E6A60EDAC5A05DEEA11152404217593A4556FA50BA4701B4358A59EFCF32DEA7"
+    },
+    {
+      "Path": "docs/db/tests/verify-rollback.sql",
+      "SHA256": "448E2ECAC231792885E1F1D3128FA2B9FB1A38C8BBC3C5554D36B98EF147B5E2"
+    },
+    {
+      "Path": "docs/db/tests/verify-v003-upgrade.sql",
+      "SHA256": "31D6E40F3C302CE791E2C46B0558526D16A8C8D730089A77FAF10CE8FE8F8061"
+    },
+    {
+      "Path": "docs/db/verify-schema.sql",
+      "SHA256": "048D9D88602D11F617B31FFC6A6AD436A123D247BDC6FCA8AAE33671FC2CD353"
+    },
+    {
+      "Path": "tools/inspect-screen12-examination-links.ps1",
+      "SHA256": "85D380CA35B18209E46253ED20AC00459CBF73A74CF5D2F8F6A9B09485408912"
+    },
+    {
+      "Path": "tools/screen12-schema.ps1",
+      "SHA256": "23CB96E5DA846C0900C5FC16410669FFC07D84C6E116DCBCB415E2143C6A39FA"
+    },
+    {
+      "Path": "tools/screen12_schema.py",
+      "SHA256": "E8627FA5368EFEFC58CF3E8D2A767CCB74FA4B4F3E75F55F0CD88676D61525DF"
+    },
+    {
+      "Path": "docs/db/migrations/V004__screen13_result_history_indexes.sql",
+      "SHA256": "03A73FD6DA2B2AA3CC03371097A1E0EA7B527F9B4D75CBB55931087559AFE64F"
+    }
+  ],
+  "SchemaVersions": [
+    "V001",
+    "V002",
+    "V003",
+    "V004"
+  ],
+  "Revision": 5,
+  "EntityMappings": [
+    {
+      "Source": "src/main/java/dts/com/examination/domain/entity/Exam.java",
+      "Table": "exams"
+    },
+    {
+      "Source": "src/main/java/dts/com/examination/domain/entity/ExamStructure.java",
+      "Table": "exam_structures"
+    },
+    {
+      "Source": "src/main/java/dts/com/examination/domain/entity/ExamCriteria.java",
+      "Table": "exam_criterias"
+    },
+    {
+      "Source": "src/main/java/dts/com/examination/domain/entity/ExamRule.java",
+      "Table": "exam_rules"
+    },
+    {
+      "Source": "src/main/java/dts/com/examination/domain/entity/ExamVersion.java",
+      "Table": "exam_versions"
+    },
+    {
+      "Source": "src/main/java/dts/com/examination/domain/entity/ExamSession.java",
+      "Table": "exam_sessions"
+    },
+    {
+      "Source": "src/main/java/dts/com/examination/domain/entity/ExamSessionAnswer.java",
+      "Table": "exam_session_answers"
+    }
+  ]
+}

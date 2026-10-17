@@ -1,3 +1,5 @@
+-- Reference DDL for a NEW database; use apply-schema.psql for managed fresh/existing migrations.
+-- Load 00_trigger_functions.sql before these standalone reference files.
 -- Table: exam_session_answers
 -- Service: examination
 -- Entities mapped: ExamSessionAnswer
@@ -36,8 +38,7 @@ CREATE TABLE exam_session_answers (
 ALTER TABLE exam_session_answers
     ADD CONSTRAINT pk_exam_session_answers PRIMARY KEY (id),
     ADD CONSTRAINT fk_exam_session_answers_exam_session_id FOREIGN KEY (exam_session_id) REFERENCES exam_sessions(id),
-    ADD CONSTRAINT ck_exam_session_answers_score CHECK (score >= 0),
-    ADD CONSTRAINT ck_exam_session_answers_has_answer CHECK (selected_answer IS NOT NULL);
+    ADD CONSTRAINT ck_exam_session_answers_score CHECK (score >= 0);
 
 COMMENT ON COLUMN exam_session_answers.id IS 'Khóa chính, định danh duy nhất cho câu trả lời';
 COMMENT ON COLUMN exam_session_answers.exam_session_id IS 'Khóa ngoại tham chiếu đến phiên thi (exam_sessions) của thí sinh';
@@ -61,4 +62,4 @@ CREATE INDEX ix_exam_session_answers_question_id ON exam_session_answers (questi
 CREATE TRIGGER trg_exam_session_answers_updated_at
     BEFORE UPDATE ON exam_session_answers
     FOR EACH ROW
-    EXECUTE FUNCTION trigger_set_updated_at();
+    EXECUTE FUNCTION dts_examination_set_updated_at();

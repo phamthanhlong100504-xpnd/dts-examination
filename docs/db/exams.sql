@@ -1,3 +1,5 @@
+-- Reference DDL for a NEW database; use apply-schema.psql for managed fresh/existing migrations.
+-- Load 00_trigger_functions.sql before these standalone reference files.
 -- Table: exams
 -- Service: examination
 -- Entities mapped: Exam
@@ -11,7 +13,7 @@
 CREATE TABLE exams (
     id              UUID            NOT NULL    DEFAULT gen_random_uuid(),  -- Primary key for the exam record
     thumbnail_id    UUID            NULL,                                   -- Reference to the media service for the exam thumbnail. NULL means no thumbnail.
-    created_by      UUID            NOT NULL,                               -- Reference to the identity service for the creator user
+    created_by      UUID            NULL,                               -- Reference to the identity service for the creator user
     updated_by      UUID            NULL,                                   -- Reference to the identity service for the last updater user. NULL if never updated.
     title           VARCHAR(100)    NOT NULL,                               -- Unique title for the examination
     status          VARCHAR(30)     NOT NULL    DEFAULT 'DRAFT',            -- Current status of the exam (e.g., DRAFT, PUBLISHED)
@@ -44,7 +46,7 @@ CREATE INDEX ix_exams_status ON exams (status) WHERE deleted_at IS NULL;
 CREATE INDEX ix_exams_created_by ON exams (created_by);
 
 -- Trigger: auto-update updated_at on row modification
-CREATE OR REPLACE FUNCTION trigger_set_updated_at()
+CREATE OR REPLACE FUNCTION dts_examination_set_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
     NEW.updated_at = CURRENT_TIMESTAMP;
@@ -55,4 +57,4 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER trg_exams_updated_at
     BEFORE UPDATE ON exams
     FOR EACH ROW
-    EXECUTE FUNCTION trigger_set_updated_at();
+    EXECUTE FUNCTION dts_examination_set_updated_at();
