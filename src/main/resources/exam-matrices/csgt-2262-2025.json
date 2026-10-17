@@ -1,0 +1,328 @@
+{
+  "id": "CSGT_2262_2025_600_V1",
+  "bankVersion": "dts-2026-600-v1",
+  "validFrom": "2025-06-01",
+  "validUntilExclusive": "2027-03-01",
+  "sources": {
+    "topicQuotas": "https://xaydungchinhsach.chinhphu.vn/huong-dan-su-dung-bo-600-cau-hoi-dung-de-sat-hach-lai-xe-co-gioi-duong-bo-119250513110514585.htm",
+    "durationAndPassing": "Cauhinh.pdf supplied by project owner;2025/2026 policy",
+    "transition": "https://congan.laichau.gov.vn/pho-bien-giao-duc-phap-luat/cac-diem-moi-trong-cong-tac-sat-hach-cap-doi-giay-phep-lai-x-5501.html"
+  },
+  "profiles": [
+    {
+      "licenseClasses": [
+        "A1"
+      ],
+      "totalQuestions": 25,
+      "durationMinutes": 19,
+      "passingCorrectAnswers": 21,
+      "criticalQuestionCount": 1,
+      "topics": [
+        {
+          "code": "RULES",
+          "sourceChapterIds": [
+            1
+          ],
+          "questionCount": 8
+        },
+        {
+          "code": "CULTURE",
+          "sourceChapterIds": [
+            2
+          ],
+          "questionCount": 1
+        },
+        {
+          "code": "TECHNIQUE_OR_CONSTRUCTION",
+          "sourceChapterIds": [
+            3,
+            4
+          ],
+          "questionCount": 1
+        },
+        {
+          "code": "SIGNS",
+          "sourceChapterIds": [
+            5
+          ],
+          "questionCount": 8
+        },
+        {
+          "code": "SITUATIONS",
+          "sourceChapterIds": [
+            6
+          ],
+          "questionCount": 6
+        }
+      ]
+    },
+    {
+      "licenseClasses": [
+        "A",
+        "B1"
+      ],
+      "totalQuestions": 25,
+      "durationMinutes": 19,
+      "passingCorrectAnswers": 23,
+      "criticalQuestionCount": 1,
+      "topics": [
+        {
+          "code": "RULES",
+          "sourceChapterIds": [
+            1
+          ],
+          "questionCount": 8
+        },
+        {
+          "code": "CULTURE",
+          "sourceChapterIds": [
+            2
+          ],
+          "questionCount": 1
+        },
+        {
+          "code": "TECHNIQUE_OR_CONSTRUCTION",
+          "sourceChapterIds": [
+            3,
+            4
+          ],
+          "questionCount": 1
+        },
+        {
+          "code": "SIGNS",
+          "sourceChapterIds": [
+            5
+          ],
+          "questionCount": 8
+        },
+        {
+          "code": "SITUATIONS",
+          "sourceChapterIds": [
+            6
+          ],
+          "questionCount": 6
+        }
+      ]
+    },
+    {
+      "licenseClasses": [
+        "B"
+      ],
+      "totalQuestions": 30,
+      "durationMinutes": 20,
+      "passingCorrectAnswers": 27,
+      "criticalQuestionCount": 1,
+      "topics": [
+        {
+          "code": "RULES",
+          "sourceChapterIds": [
+            1
+          ],
+          "questionCount": 8
+        },
+        {
+          "code": "CULTURE",
+          "sourceChapterIds": [
+            2
+          ],
+          "questionCount": 1
+        },
+        {
+          "code": "TECHNIQUE",
+          "sourceChapterIds": [
+            3
+          ],
+          "questionCount": 1
+        },
+        {
+          "code": "CONSTRUCTION",
+          "sourceChapterIds": [
+            4
+          ],
+          "questionCount": 1
+        },
+        {
+          "code": "SIGNS",
+          "sourceChapterIds": [
+            5
+          ],
+          "questionCount": 9
+        },
+        {
+          "code": "SITUATIONS",
+          "sourceChapterIds": [
+            6
+          ],
+          "questionCount": 9
+        }
+      ]
+    },
+    {
+      "licenseClasses": [
+        "C1"
+      ],
+      "totalQuestions": 35,
+      "durationMinutes": 22,
+      "passingCorrectAnswers": 32,
+      "criticalQuestionCount": 1,
+      "topics": [
+        {
+          "code": "RULES",
+          "sourceChapterIds": [
+            1
+          ],
+          "questionCount": 10
+        },
+        {
+          "code": "CULTURE",
+          "sourceChapterIds": [
+            2
+          ],
+          "questionCount": 1
+        },
+        {
+          "code": "TECHNIQUE",
+          "sourceChapterIds": [
+            3
+          ],
+          "questionCount": 2
+        },
+        {
+          "code": "CONSTRUCTION",
+          "sourceChapterIds": [
+            4
+          ],
+          "questionCount": 1
+        },
+        {
+          "code": "SIGNS",
+          "sourceChapterIds": [
+            5
+          ],
+          "questionCount": 10
+        },
+        {
+          "code": "SITUATIONS",
+          "sourceChapterIds": [
+            6
+          ],
+          "questionCount": 10
+        }
+      ]
+    },
+    {
+      "licenseClasses": [
+        "C"
+      ],
+      "totalQuestions": 40,
+      "durationMinutes": 24,
+      "passingCorrectAnswers": 36,
+      "criticalQuestionCount": 1,
+      "topics": [
+        {
+          "code": "RULES",
+          "sourceChapterIds": [
+            1
+          ],
+          "questionCount": 10
+        },
+        {
+          "code": "CULTURE",
+          "sourceChapterIds": [
+            2
+          ],
+          "questionCount": 1
+        },
+        {
+          "code": "TECHNIQUE",
+          "sourceChapterIds": [
+            3
+          ],
+          "questionCount": 2
+        },
+        {
+          "code": "CONSTRUCTION",
+          "sourceChapterIds": [
+            4
+          ],
+          "questionCount": 1
+        },
+        {
+          "code": "SIGNS",
+          "sourceChapterIds": [
+            5
+          ],
+          "questionCount": 14
+        },
+        {
+          "code": "SITUATIONS",
+          "sourceChapterIds": [
+            6
+          ],
+          "questionCount": 11
+        }
+      ]
+    },
+    {
+      "licenseClasses": [
+        "D1",
+        "D2",
+        "D",
+        "BE",
+        "C1E",
+        "CE",
+        "D1E",
+        "D2E",
+        "DE"
+      ],
+      "totalQuestions": 45,
+      "durationMinutes": 26,
+      "passingCorrectAnswers": 41,
+      "criticalQuestionCount": 1,
+      "topics": [
+        {
+          "code": "RULES",
+          "sourceChapterIds": [
+            1
+          ],
+          "questionCount": 10
+        },
+        {
+          "code": "CULTURE",
+          "sourceChapterIds": [
+            2
+          ],
+          "questionCount": 1
+        },
+        {
+          "code": "TECHNIQUE",
+          "sourceChapterIds": [
+            3
+          ],
+          "questionCount": 2
+        },
+        {
+          "code": "CONSTRUCTION",
+          "sourceChapterIds": [
+            4
+          ],
+          "questionCount": 1
+        },
+        {
+          "code": "SIGNS",
+          "sourceChapterIds": [
+            5
+          ],
+          "questionCount": 16
+        },
+        {
+          "code": "SITUATIONS",
+          "sourceChapterIds": [
+            6
+          ],
+          "questionCount": 14
+        }
+      ]
+    }
+  ]
+}
