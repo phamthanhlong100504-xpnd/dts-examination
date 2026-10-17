@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -23,8 +24,6 @@ import org.springframework.web.bind.annotation.RestController;
 import java.security.Principal;
 import java.util.UUID;
 
-import org.springframework.security.access.prepost.PreAuthorize;
-
 @RestController
 @RequestMapping("/api/v1/exam-structures")
 @RequiredArgsConstructor
@@ -34,7 +33,7 @@ public class ExamStructureController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasAuthority('PERM_exam_structure:create')")
+    @PreAuthorize("@examAdminAccess.can(authentication, 'exam_structure', 'create')")
     public ExamStructureResponse create(
             @Valid @RequestBody CreateExamStructureRequest request,
             Principal principal) {
@@ -43,7 +42,7 @@ public class ExamStructureController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAuthority('PERM_exam_structure:read')")
+    @PreAuthorize("@examAdminAccess.can(authentication, 'exam_structure', 'read')")
     public Page<ExamStructureResponse> getList(
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String status,
@@ -52,13 +51,13 @@ public class ExamStructureController {
     }
 
     @GetMapping("/{structureId}")
-    @PreAuthorize("hasAuthority('PERM_exam_structure:read')")
+    @PreAuthorize("@examAdminAccess.can(authentication, 'exam_structure', 'read')")
     public ExamStructureResponse getDetail(@PathVariable UUID structureId) {
         return examStructureService.getDetail(structureId);
     }
 
     @PatchMapping("/{structureId}")
-    @PreAuthorize("hasAuthority('PERM_exam_structure:update')")
+    @PreAuthorize("@examAdminAccess.can(authentication, 'exam_structure', 'update')")
     public ExamStructureResponse update(
             @PathVariable UUID structureId,
             @Valid @RequestBody UpdateExamStructureRequest request,
@@ -69,7 +68,7 @@ public class ExamStructureController {
 
     @DeleteMapping("/{structureId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    @PreAuthorize("hasAuthority('PERM_exam_structure:delete')")
+    @PreAuthorize("@examAdminAccess.can(authentication, 'exam_structure', 'delete')")
     public void delete(
             @PathVariable UUID structureId,
             Principal principal) {

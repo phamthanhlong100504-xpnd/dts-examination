@@ -30,14 +30,14 @@ public class ExamRuleController {
     private final ExamRuleService examRuleService;
 
     @PostMapping
-    @PreAuthorize("hasAuthority('PERM_exam_rule:create')")
+    @PreAuthorize("@examAdminAccess.can(authentication, 'exam_rule', 'create')")
     public ResponseEntity<ExamRuleResponse> createRule(@RequestBody @Valid CreateExamRuleRequest request) {
         ExamRuleResponse response = examRuleService.createRule(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @GetMapping
-    @PreAuthorize("hasAuthority('PERM_exam_rule:read')")
+    @PreAuthorize("@examAdminAccess.can(authentication, 'exam_rule', 'read')")
     public ResponseEntity<PageResponse<ExamRuleResponse>> getRuleList(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
@@ -48,14 +48,14 @@ public class ExamRuleController {
     }
 
     @GetMapping("/{ruleId}")
-    @PreAuthorize("hasAuthority('PERM_exam_rule:read')")
+    @PreAuthorize("@examAdminAccess.can(authentication, 'exam_rule', 'read')")
     public ResponseEntity<ExamRuleResponse> getRuleDetail(@PathVariable UUID ruleId) {
         ExamRuleResponse response = examRuleService.getRuleDetail(ruleId);
         return ResponseEntity.ok(response);
     }
 
     @PatchMapping("/{ruleId}")
-    @PreAuthorize("hasAuthority('PERM_exam_rule:update')")
+    @PreAuthorize("@examAdminAccess.can(authentication, 'exam_rule', 'update')")
     public ResponseEntity<ExamRuleResponse> updateRule(
             @PathVariable UUID ruleId,
             @RequestBody @Valid UpdateExamRuleRequest request) {
@@ -64,7 +64,7 @@ public class ExamRuleController {
     }
 
     @DeleteMapping("/{ruleId}")
-    @PreAuthorize("hasAuthority('PERM_exam_rule:delete')")
+    @PreAuthorize("@examAdminAccess.can(authentication, 'exam_rule', 'delete')")
     public ResponseEntity<Void> deleteRule(@PathVariable UUID ruleId) {
         examRuleService.deleteRule(ruleId);
         return ResponseEntity.noContent().build();

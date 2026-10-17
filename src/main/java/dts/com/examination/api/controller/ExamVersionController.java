@@ -32,55 +32,58 @@ public class ExamVersionController {
 
     @PostMapping("/exams/{examId}/versions")
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasAuthority('PERM_exam_version:create')")
-    public ExamVersionResponse createExamVersion(@PathVariable UUID examId,
-                                                 @Valid @RequestBody CreateExamVersionRequest request) {
+    @PreAuthorize("@examAdminAccess.can(authentication, 'exam_version', 'create')")
+    public ExamVersionResponse createExamVersion(
+            @PathVariable UUID examId,
+            @Valid @RequestBody CreateExamVersionRequest request) {
         return examVersionService.create(examId, request);
     }
 
     @GetMapping("/exams/{examId}/versions")
-    @PreAuthorize("hasAuthority('PERM_exam_version:read')")
-    public Page<ExamVersionResponse> getExamVersionList(@PathVariable UUID examId,
-                                                        @RequestParam(required = false) String status,
-                                                        Pageable pageable) {
+    @PreAuthorize("@examAdminAccess.can(authentication, 'exam_version', 'read')")
+    public Page<ExamVersionResponse> getExamVersionList(
+            @PathVariable UUID examId,
+            @RequestParam(required = false) String status,
+            Pageable pageable) {
         return examVersionService.getList(examId, status, pageable);
     }
 
     @GetMapping("/exam-versions/{versionId}")
-    @PreAuthorize("hasAuthority('PERM_exam_version:read')")
+    @PreAuthorize("@examAdminAccess.can(authentication, 'exam_version', 'read')")
     public ExamVersionResponse getExamVersionDetail(@PathVariable UUID versionId) {
         return examVersionService.getDetail(versionId);
     }
 
     @PatchMapping("/exam-versions/{versionId}")
-    @PreAuthorize("hasAuthority('PERM_exam_version:update')")
-    public ExamVersionResponse updateExamVersion(@PathVariable UUID versionId,
-                                                 @Valid @RequestBody UpdateExamVersionRequest request) {
+    @PreAuthorize("@examAdminAccess.can(authentication, 'exam_version', 'update')")
+    public ExamVersionResponse updateExamVersion(
+            @PathVariable UUID versionId,
+            @Valid @RequestBody UpdateExamVersionRequest request) {
         return examVersionService.update(versionId, request);
     }
 
     @DeleteMapping("/exam-versions/{versionId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    @PreAuthorize("hasAuthority('PERM_exam_version:delete')")
+    @PreAuthorize("@examAdminAccess.can(authentication, 'exam_version', 'delete')")
     public void deleteExamVersion(@PathVariable UUID versionId) {
         examVersionService.delete(versionId);
     }
 
     @PostMapping("/exam-versions/{versionId}/publish")
-    @PreAuthorize("hasAuthority('PERM_exam_version:publish')")
+    @PreAuthorize("@examAdminAccess.can(authentication, 'exam_version', 'publish')")
     public ExamVersionResponse publishExamVersion(@PathVariable UUID versionId) {
         return examVersionService.publish(versionId);
     }
 
     @PostMapping("/exam-versions/{versionId}/archive")
-    @PreAuthorize("hasAuthority('PERM_exam_version:archive')")
+    @PreAuthorize("@examAdminAccess.can(authentication, 'exam_version', 'archive')")
     public ExamVersionResponse archiveExamVersion(@PathVariable UUID versionId) {
         return examVersionService.archive(versionId);
     }
 
     @PostMapping("/exam-versions/{versionId}/clone")
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasAuthority('PERM_exam_version:clone')")
+    @PreAuthorize("@examAdminAccess.can(authentication, 'exam_version', 'clone')")
     public ExamVersionResponse cloneExamVersion(@PathVariable UUID versionId) {
         return examVersionService.clone(versionId);
     }

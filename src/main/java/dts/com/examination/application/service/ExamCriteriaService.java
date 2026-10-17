@@ -10,6 +10,9 @@ import dts.com.examination.domain.entity.ExamCriteria;
 import dts.com.examination.domain.entity.json.CriteriaConfig;
 import dts.com.examination.domain.repository.ExamCriteriaRepository;
 import lombok.RequiredArgsConstructor;
+import dts.com.examination.domain.repository.ExamVersionRepository;
+import dts.com.examination.application.exception.ExaminationException;
+import org.springframework.http.HttpStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -22,6 +25,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ExamCriteriaService {
 
+    private final ExamVersionRepository examVersionRepository;
     private final ExamCriteriaRepository examCriteriaRepository;
 
     @Transactional
@@ -60,18 +64,17 @@ public class ExamCriteriaService {
 
     @Transactional
     public ExamCriteriaResponse updateCriteria(UUID criteriaId, UpdateExamCriteriaRequest request) {
-        ExamCriteria criteria = examCriteriaRepository.findByIdActive(criteriaId)
+        ExamCriteria criteria = examCriteriaRepository.findByIdForUpdate(criteriaId)
                 .orElseThrow(() -> new ResourceNotFoundException("ExamCriteria not found"));
+
+        if (examVersionRepository.existsByExamCriteriaIdAndStatusIn(criteriaId, java.util.List.of("PUBLISHED", "ARCHIVED"))) {
+            throw new ExaminationException(HttpStatus.CONFLICT, "CRITERIA_IN_USE", "Create a new configuration instead of editing a published or archived one");
+        }
 
         if (!"ACTIVE".equals(criteria.getStatus())) {
             throw new BusinessValidationException("Cannot update inactive criteria");
         }
 
-        // TODO: Query ExamVersionRepository to check if criteriaId is referenced by a PUBLISHED exam version
-        // boolean isReferenced = examVersionRepository.existsByCriteriaIdAndStatus(criteriaId, "PUBLISHED");
-        // if (isReferenced) {
-        //     throw new BusinessException("Criteria is used by PUBLISHED ExamVersion");
-        // }
 
         if (request.criteria() != null) {
             validateCriteriaConfig(request.criteria());
@@ -90,14 +93,13 @@ public class ExamCriteriaService {
 
     @Transactional
     public void deleteCriteria(UUID criteriaId) {
-        ExamCriteria criteria = examCriteriaRepository.findByIdActive(criteriaId)
+        ExamCriteria criteria = examCriteriaRepository.findByIdForUpdate(criteriaId)
                 .orElseThrow(() -> new ResourceNotFoundException("ExamCriteria not found"));
 
-        // TODO: Query ExamVersionRepository to check if criteriaId is referenced by ANY exam version
-        // boolean isReferenced = examVersionRepository.existsByCriteriaId(criteriaId);
-        // if (isReferenced) {
-        //     throw new BusinessException("Criteria is used by an ExamVersion and cannot be deleted");
-        // }
+        if (examVersionRepository.existsByExamCriteriaId(criteriaId)) {
+            throw new ExaminationException(HttpStatus.CONFLICT, "CRITERIA_REFERENCED", "Cannot delete a configuration referenced by any version history");
+        }
+
 
         criteria.setDeletedAt(Instant.now());
         examCriteriaRepository.save(criteria);

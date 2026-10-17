@@ -9,6 +9,9 @@ import dts.com.examination.application.exception.ResourceNotFoundException;
 import dts.com.examination.domain.entity.ExamRule;
 import dts.com.examination.domain.repository.ExamRuleRepository;
 import lombok.RequiredArgsConstructor;
+import dts.com.examination.domain.repository.ExamVersionRepository;
+import dts.com.examination.application.exception.ExaminationException;
+import org.springframework.http.HttpStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -25,6 +28,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ExamRuleService {
 
+    private final ExamVersionRepository examVersionRepository;
     private final ExamRuleRepository examRuleRepository;
 
     @Transactional
@@ -103,14 +107,17 @@ public class ExamRuleService {
 
     @Transactional
     public ExamRuleResponse updateRule(UUID ruleId, UpdateExamRuleRequest request) {
-        ExamRule rule = examRuleRepository.findByIdActive(ruleId)
+        ExamRule rule = examRuleRepository.findByIdForUpdate(ruleId)
                 .orElseThrow(() -> new ResourceNotFoundException("Exam rule not found"));
+
+        if (examVersionRepository.existsByExamRuleIdAndStatusIn(ruleId, java.util.List.of("PUBLISHED", "ARCHIVED"))) {
+            throw new ExaminationException(HttpStatus.CONFLICT, "RULE_IN_USE", "Create a new configuration instead of editing a published or archived one");
+        }
 
         if (!"ACTIVE".equals(rule.getStatus())) {
             throw new BusinessException("Only ACTIVE rules can be updated");
         }
 
-        // TODO: Check if rule is used by PUBLISHED ExamVersion once ExamVersion is implemented
 
         // Resolve effective values (merge request with existing)
         boolean allowRetry = request.getAllowRetry() != null ? request.getAllowRetry() : rule.isAllowRetry();
@@ -165,10 +172,13 @@ public class ExamRuleService {
 
     @Transactional
     public void deleteRule(UUID ruleId) {
-        ExamRule rule = examRuleRepository.findByIdActive(ruleId)
+        ExamRule rule = examRuleRepository.findByIdForUpdate(ruleId)
                 .orElseThrow(() -> new ResourceNotFoundException("Exam rule not found"));
 
-        // TODO: Check if rule is used by ANY ExamVersion once ExamVersion is implemented
+        if (examVersionRepository.existsByExamRuleId(ruleId)) {
+            throw new ExaminationException(HttpStatus.CONFLICT, "RULE_REFERENCED", "Cannot delete a configuration referenced by any version history");
+        }
+
 
         rule.setDeletedAt(Instant.now());
         examRuleRepository.save(rule);

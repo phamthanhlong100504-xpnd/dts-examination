@@ -4,10 +4,12 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Builder;
+import dts.com.examination.application.service.selection.ExamSelectionMode;
 
 import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
+import java.util.List;
 
 @Builder
 public record CreateExamVersionRequest(
@@ -40,6 +42,16 @@ public record CreateExamVersionRequest(
         
         Instant endedAt,
 
-        Map<String, Object> metadata
+        Map<String, Object> metadata,
+        @Size(max = 10) String licenseClass,
+        @Size(max = 128) String bankVersion,
+        ExamSelectionMode selectionMode,
+        @Size(max = 1000) List<@NotNull UUID> manualQuestionIds
 ) {
+    public CreateExamVersionRequest(String title, String examType, UUID thumbnailId, UUID examStructureId,
+            UUID examRuleId, UUID examCriteriaId, String contentType, UUID contentId, Instant startedAt,
+            Instant endedAt, Map<String, Object> metadata) {
+        this(title, examType, thumbnailId, examStructureId, examRuleId, examCriteriaId, contentType, contentId,
+                startedAt, endedAt, metadata, null, null, null, null);
+    }
 }

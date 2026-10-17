@@ -34,13 +34,13 @@ public class ExamController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasAuthority('PERM_exam:create')")
+    @PreAuthorize("@examAdminAccess.can(authentication, 'exam', 'create')")
     public ExamResponse create(@Valid @RequestBody CreateExamRequest request) {
         return examService.create(request);
     }
 
     @GetMapping
-    @PreAuthorize("hasAuthority('PERM_exam:read')")
+    @PreAuthorize("@examAdminAccess.can(authentication, 'exam', 'read')")
     public Page<ExamResponse> getList(
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String status,
@@ -50,32 +50,36 @@ public class ExamController {
     }
 
     @GetMapping("/{examId}")
-    @PreAuthorize("hasAuthority('PERM_exam:read')")
+    @PreAuthorize("@examAdminAccess.can(authentication, 'exam', 'read')")
     public ExamResponse getDetail(@PathVariable UUID examId) {
         return examService.getDetail(examId);
     }
 
     @PatchMapping("/{examId}")
-    @PreAuthorize("hasAuthority('PERM_exam:update')")
-    public ExamResponse update(@PathVariable UUID examId, @Valid @RequestBody UpdateExamRequest request) {
+    @PreAuthorize("@examAdminAccess.can(authentication, 'exam', 'update')")
+    public ExamResponse update(
+            @PathVariable UUID examId,
+            @Valid @RequestBody UpdateExamRequest request) {
         return examService.update(examId, request);
     }
 
     @DeleteMapping("/{examId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    @PreAuthorize("hasAuthority('PERM_exam:delete')")
+    @PreAuthorize("@examAdminAccess.can(authentication, 'exam', 'delete')")
     public void delete(@PathVariable UUID examId) {
         examService.delete(examId);
     }
 
     @PatchMapping("/{examId}/status")
-    @PreAuthorize("hasAuthority('PERM_exam:update')")
-    public ExamResponse changeStatus(@PathVariable UUID examId, @Valid @RequestBody ChangeExamStatusRequest request) {
+    @PreAuthorize("@examAdminAccess.can(authentication, 'exam', 'update')")
+    public ExamResponse changeStatus(
+            @PathVariable UUID examId,
+            @Valid @RequestBody ChangeExamStatusRequest request) {
         return examService.changeStatus(examId, request);
     }
 
     @GetMapping("/{examId}/sessions")
-    // @PreAuthorize("hasAuthority('PERM_exam_session:read')")
+    @PreAuthorize("isAuthenticated()")
     public org.springframework.http.ResponseEntity<dts.com.examination.api.response.SessionHistoryResponse> getSessionHistory(
             @PathVariable UUID examId,
             @RequestParam(defaultValue = "0") int page,
@@ -84,6 +88,8 @@ public class ExamController {
             @RequestParam(required = false) String sort,
             java.security.Principal principal) {
         UUID userId = UUID.fromString(principal.getName());
-        return org.springframework.http.ResponseEntity.ok(examSessionService.getSessionHistory(examId, userId, page, size, status, sort));
+        return org.springframework.http.ResponseEntity.ok(
+                examSessionService.getSessionHistory(
+                        examId, userId, page, size, status, sort));
     }
 }
