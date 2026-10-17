@@ -24,4 +24,9 @@ public class ExamSessionDetailResponse {
     private Long answeredQuestions;
     private Long totalQuestions;
     private ExamRuleResponse examRule;
+    private UUID examId;
+    private Integer version;
+    private Integer currentPosition;
+    private java.util.List<UUID> markedQuestionIds;
+    private Instant serverNow;
 }

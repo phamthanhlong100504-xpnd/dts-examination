@@ -1,81 +1,148 @@
 package dts.com.examination.application.exception;
 
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.ExceptionHandler;
-import org.springframework.web.bind.annotation.ResponseStatus;
-import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.validation.BindException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
+
+import java.util.UUID;
 
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(ExaminationException.class)
+    public ResponseEntity<ErrorResponse> handleExaminationException(
+            ExaminationException ex, HttpServletRequest request, HttpServletResponse servletResponse) {
+        log.warn("Examination error: code={}, status={}", ex.getCode(), ex.getStatus().value());
+        return error(ex.getStatus(), ex.getCode(), ex.getMessage(), request, servletResponse);
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public ErrorResponse handleValidationException(MethodArgumentNotValidException ex) {
-        log.warn("Validation failed: {}", ex.getMessage());
-        return buildErrorResponse(HttpStatus.BAD_REQUEST, "Bad Request", "Validation failed: " + ex.getBindingResult().getAllErrors().get(0).getDefaultMessage());
+    public ResponseEntity<ErrorResponse> handleValidationException(
+            MethodArgumentNotValidException ex, HttpServletRequest request, HttpServletResponse servletResponse) {
+        String message = ex.getBindingResult().getAllErrors().stream()
+                .map(validation -> validation.getDefaultMessage())
+                .filter(value -> value != null && !value.isBlank())
+                .findFirst().orElse("Invalid request");
+        return error(HttpStatus.BAD_REQUEST, "BAD_REQUEST", "Validation failed: " + message, request, servletResponse);
+    }
+
+    @ExceptionHandler(HandlerMethodValidationException.class)
+    public ResponseEntity<ErrorResponse> handleMethodValidationException(
+            HandlerMethodValidationException ex, HttpServletRequest request, HttpServletResponse servletResponse) {
+        if (ex.isForReturnValue()) {
+            log.error("Response validation failed", ex);
+            return error(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR",
+                    "An unexpected error occurred. Please contact support.", request, servletResponse);
+        }
+        return error(HttpStatus.BAD_REQUEST, "BAD_REQUEST", "Invalid request parameters", request, servletResponse);
+    }
+
+    @ExceptionHandler({HttpMessageNotReadableException.class, MethodArgumentTypeMismatchException.class,
+            MissingServletRequestParameterException.class, ConstraintViolationException.class,
+            BindException.class, IllegalArgumentException.class})
+    public ResponseEntity<ErrorResponse> handleInvalidRequest(
+            Exception ex, HttpServletRequest request, HttpServletResponse servletResponse) {
+        return error(HttpStatus.BAD_REQUEST, "BAD_REQUEST",
+                "Invalid request parameters or JSON body", request, servletResponse);
     }
 
     @ExceptionHandler(BusinessValidationException.class)
-    @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public ErrorResponse handleBusinessValidationException(BusinessValidationException ex) {
-        log.warn("Business validation failed: {}", ex.getMessage());
-        return buildErrorResponse(HttpStatus.BAD_REQUEST, "Bad Request", ex.getMessage());
+    public ResponseEntity<ErrorResponse> handleBusinessValidationException(
+            BusinessValidationException ex, HttpServletRequest request, HttpServletResponse servletResponse) {
+        return error(HttpStatus.BAD_REQUEST, "BAD_REQUEST", ex.getMessage(), request, servletResponse);
     }
 
     @ExceptionHandler(BusinessException.class)
-    @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public ErrorResponse handleBusinessException(BusinessException ex) {
-        log.warn("Business logic failed: {}", ex.getMessage());
-        return buildErrorResponse(HttpStatus.BAD_REQUEST, "Bad Request", ex.getMessage());
+    public ResponseEntity<ErrorResponse> handleBusinessException(
+            BusinessException ex, HttpServletRequest request, HttpServletResponse servletResponse) {
+        return error(HttpStatus.BAD_REQUEST, "BAD_REQUEST", ex.getMessage(), request, servletResponse);
     }
 
     @ExceptionHandler(ResourceNotFoundException.class)
-    @ResponseStatus(HttpStatus.NOT_FOUND)
-    public ErrorResponse handleResourceNotFoundException(ResourceNotFoundException ex) {
-        log.warn("Resource not found: {}", ex.getMessage());
-        return buildErrorResponse(HttpStatus.NOT_FOUND, "Not Found", ex.getMessage());
+    public ResponseEntity<ErrorResponse> handleResourceNotFoundException(
+            ResourceNotFoundException ex, HttpServletRequest request, HttpServletResponse servletResponse) {
+        return error(HttpStatus.NOT_FOUND, "NOT_FOUND", ex.getMessage(), request, servletResponse);
+    }
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ErrorResponse> handleNoResourceFoundException(
+            NoResourceFoundException ex, HttpServletRequest request, HttpServletResponse servletResponse) {
+        return error(HttpStatus.NOT_FOUND, "NOT_FOUND", "Resource not found", request, servletResponse);
     }
 
     @ExceptionHandler(BusinessRuleException.class)
-    @ResponseStatus(HttpStatus.CONFLICT)
-    public ErrorResponse handleBusinessRuleException(BusinessRuleException ex) {
-        log.warn("Business rule violation: {}", ex.getMessage());
-        return buildErrorResponse(HttpStatus.CONFLICT, "Conflict", ex.getMessage());
+    public ResponseEntity<ErrorResponse> handleBusinessRuleException(
+            BusinessRuleException ex, HttpServletRequest request, HttpServletResponse servletResponse) {
+        return error(HttpStatus.CONFLICT, "CONFLICT", ex.getMessage(), request, servletResponse);
     }
 
     @ExceptionHandler(AccessDeniedException.class)
-    @ResponseStatus(HttpStatus.FORBIDDEN)
-    public ErrorResponse handleAccessDeniedException(AccessDeniedException ex) {
-        log.warn("Access denied: {}", ex.getMessage());
-        return buildErrorResponse(HttpStatus.FORBIDDEN, "Forbidden", ex.getMessage());
+    public ResponseEntity<ErrorResponse> handleAccessDeniedException(
+            AccessDeniedException ex, HttpServletRequest request, HttpServletResponse servletResponse) {
+        return error(HttpStatus.FORBIDDEN, "ACCESS_DENIED",
+                "You do not have permission to access this resource", request, servletResponse);
     }
 
     @ExceptionHandler(AuthenticationException.class)
-    @ResponseStatus(HttpStatus.UNAUTHORIZED)
-    public ErrorResponse handleAuthenticationException(AuthenticationException ex) {
-        log.warn("Authentication failed: {}", ex.getMessage());
-        return buildErrorResponse(HttpStatus.UNAUTHORIZED, "Unauthorized", "Bắt buộc phải có Token hợp lệ để truy cập");
+    public ResponseEntity<ErrorResponse> handleAuthenticationException(
+            AuthenticationException ex, HttpServletRequest request, HttpServletResponse servletResponse) {
+        return error(HttpStatus.UNAUTHORIZED, "UNAUTHENTICATED",
+                "A valid access token is required", request, servletResponse);
     }
 
     @ExceptionHandler(Exception.class)
-    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
-    public ErrorResponse handleGenericException(Exception ex) {
+    public ResponseEntity<ErrorResponse> handleGenericException(
+            Exception ex, HttpServletRequest request, HttpServletResponse servletResponse) {
         log.error("Unexpected server error occurred", ex);
-        return buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Internal Server Error", "An unexpected error occurred. Please contact support.");
+        return error(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR",
+                "An unexpected error occurred. Please contact support.", request, servletResponse);
     }
 
-    private ErrorResponse buildErrorResponse(HttpStatus status, String error, String message) {
-        return ErrorResponse.builder()
+    private ResponseEntity<ErrorResponse> error(
+            HttpStatus status, String code, String message, HttpServletRequest request, HttpServletResponse servletResponse) {
+        String traceId = MDC.get("traceId");
+        if (traceId == null || traceId.isBlank()) {
+            traceId = request.getHeader("X-Request-ID");
+        }
+        if (traceId == null || traceId.isBlank()) {
+            traceId = UUID.randomUUID().toString();
+        }
+
+        ErrorResponse body = ErrorResponse.builder()
                 .status(status.value())
-                .error(error)
+                .error(status.getReasonPhrase())
                 .message(message)
-                .traceId(MDC.get("traceId"))
+                .traceId(traceId)
+                .code(code)
                 .build();
+
+        // Replace the filter's header instead of appending a second value.
+        servletResponse.setHeader("X-Request-ID", traceId);
+
+        ResponseEntity.BodyBuilder response = ResponseEntity.status(status)
+                .contentType(MediaType.APPLICATION_JSON)
+                .header(HttpHeaders.CACHE_CONTROL, "no-store");
+        if (status == HttpStatus.UNAUTHORIZED) {
+            response.header(HttpHeaders.WWW_AUTHENTICATE, "Bearer");
+        }
+        return response.body(body);
     }
 }

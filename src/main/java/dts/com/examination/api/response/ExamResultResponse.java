@@ -19,4 +19,7 @@ public class ExamResultResponse {
     private Instant submittedAt;
     private ExamResultSummary summary;
     private List<ExamResultDetailResponse> answers;
+    private boolean resultPublished;
+    private String resultReleaseMode;
+    private Instant releaseAt;
 }

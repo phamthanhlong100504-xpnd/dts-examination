@@ -21,4 +21,6 @@ public class QuestionPaperResponse {
     private String imageUrl;
     private List<OptionPaperResponse> options;
     private Map<String, Object> selectedAnswer;
+    private List<UUID> mediaFileIds;
+    private Boolean isCritical;
 }

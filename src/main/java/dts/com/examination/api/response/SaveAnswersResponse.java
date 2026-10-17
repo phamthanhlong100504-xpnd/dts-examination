@@ -14,4 +14,5 @@ import java.time.Instant;
 public class SaveAnswersResponse {
     private Instant savedAt;
     private Integer updatedQuestions;
+    private Integer version;
 }

@@ -17,4 +17,6 @@ public class SaveAnswersRequest {
     @NotEmpty(message = "Answers array cannot be empty")
     @Valid
     private List<AnswerItemRequest> answers;
+    @jakarta.validation.constraints.Min(0)
+    private Integer version;
 }

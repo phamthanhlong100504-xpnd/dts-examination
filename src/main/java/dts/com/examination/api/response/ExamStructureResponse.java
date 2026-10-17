@@ -16,6 +16,12 @@ public record ExamStructureResponse(
         List<SectionDto> sections,
         Map<String, Object> metadata,
         OffsetDateTime createdAt,
-        OffsetDateTime updatedAt
+        OffsetDateTime updatedAt,
+        Integer totalQuestions,
+        Integer maxScore
 ) {
+    public ExamStructureResponse(UUID id, String title, String status, List<SectionDto> sections,
+            Map<String, Object> metadata, OffsetDateTime createdAt, OffsetDateTime updatedAt) {
+        this(id, title, status, sections, metadata, createdAt, updatedAt, null, null);
+    }
 }

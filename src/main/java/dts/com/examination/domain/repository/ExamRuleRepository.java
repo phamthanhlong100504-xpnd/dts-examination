@@ -1,6 +1,8 @@
 package dts.com.examination.domain.repository;
 
 import dts.com.examination.domain.entity.ExamRule;
+import jakarta.persistence.LockModeType;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -11,6 +13,10 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface ExamRuleRepository extends JpaRepository<ExamRule, UUID> {
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT e FROM ExamRule e WHERE e.id = :id AND e.deletedAt IS NULL")
+    Optional<ExamRule> findByIdForUpdate(@Param("id") UUID id);
+
 
     @Query("SELECT e FROM ExamRule e WHERE e.id = :id AND e.deletedAt IS NULL")
     Optional<ExamRule> findByIdActive(@Param("id") UUID id);

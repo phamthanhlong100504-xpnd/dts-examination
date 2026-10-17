@@ -16,4 +16,12 @@ public class ErrorResponse {
     private String error;
     private String message;
     private String traceId;
+    private String code;
+
+    public ErrorResponse(int status, String error, String message, String traceId) {
+        this.status = status;
+        this.error = error;
+        this.message = message;
+        this.traceId = traceId;
+    }
 }

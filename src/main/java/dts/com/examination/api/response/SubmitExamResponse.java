@@ -17,4 +17,6 @@ public class SubmitExamResponse {
     private String status;
     private Instant submittedAt;
     private ExamResultSummary summary;
+    private Integer version;
+    private boolean resultPublished;
 }

@@ -1,6 +1,8 @@
 package dts.com.examination.domain.repository;
 
 import dts.com.examination.domain.entity.Exam;
+import jakarta.persistence.LockModeType;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -11,6 +13,10 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface ExamRepository extends JpaRepository<Exam, UUID> {
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT e FROM Exam e WHERE e.id = :id AND e.deletedAt IS NULL")
+    Optional<Exam> findByIdForUpdate(@Param("id") UUID id);
+
 
     boolean existsByTitleAndDeletedAtIsNull(String title);
 

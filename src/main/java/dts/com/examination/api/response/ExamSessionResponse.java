@@ -23,4 +23,7 @@ public class ExamSessionResponse {
     private Instant expiredAt;
     private Integer durationSeconds;
     private ExamRuleResponse examRule;
+    private Integer version;
+    private boolean resumedExisting;
+    private Instant serverNow;
 }

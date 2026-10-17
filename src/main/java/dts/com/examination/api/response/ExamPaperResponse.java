@@ -17,4 +17,7 @@ public class ExamPaperResponse {
     private String status;
     private Long remainingSeconds;
     private List<QuestionPaperResponse> questions;
+    private Integer version;
+    private Integer currentPosition;
+    private java.time.Instant serverNow;
 }
