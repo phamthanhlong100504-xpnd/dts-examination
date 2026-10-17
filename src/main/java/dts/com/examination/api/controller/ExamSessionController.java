@@ -21,9 +21,11 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/v1/exam-sessions")
 @RequiredArgsConstructor
+@PreAuthorize("isAuthenticated() and hasAuthority('ROLE_STUDENT')")
 public class ExamSessionController {
 
     private final ExamSessionService examSessionService;
+    private final dts.com.examination.application.service.session.OfficialExamSessionService official;
 
     @PostMapping
     // @PreAuthorize("hasAuthority('PERM_exam_session:create')")
@@ -33,7 +35,7 @@ public class ExamSessionController {
         
         UUID userId = UUID.fromString(principal.getName());
         ExamSessionResponse response = examSessionService.startSession(request, userId);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        return ResponseEntity.status(response.isResumedExisting() ? HttpStatus.OK : HttpStatus.CREATED).header("Cache-Control", "no-store").body(response);
     }
 
     @GetMapping("/{sessionId}")
@@ -43,7 +45,7 @@ public class ExamSessionController {
             Principal principal) {
         UUID userId = UUID.fromString(principal.getName());
         dts.com.examination.api.response.ExamSessionDetailResponse response = examSessionService.getSessionDetail(sessionId, userId);
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok().header("Cache-Control", "no-store").body(response);
     }
 
     @GetMapping("/{sessionId}/paper")
@@ -53,7 +55,7 @@ public class ExamSessionController {
             Principal principal) {
         UUID userId = UUID.fromString(principal.getName());
         dts.com.examination.api.response.ExamPaperResponse response = examSessionService.getExamPaper(sessionId, userId);
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok().header("Cache-Control", "no-store").body(response);
     }
 
     @org.springframework.web.bind.annotation.PostMapping("/{sessionId}/answers")
@@ -64,7 +66,7 @@ public class ExamSessionController {
             Principal principal) {
         UUID userId = UUID.fromString(principal.getName());
         dts.com.examination.api.response.SaveAnswersResponse response = examSessionService.saveAnswers(sessionId, request, userId);
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok().header("Cache-Control", "no-store").body(response);
     }
 
     @org.springframework.web.bind.annotation.PostMapping("/{sessionId}/submit")
@@ -75,7 +77,7 @@ public class ExamSessionController {
             Principal principal) {
         UUID userId = UUID.fromString(principal.getName());
         dts.com.examination.api.response.SubmitExamResponse response = examSessionService.submitExam(sessionId, idempotencyKey, userId);
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok().header("Cache-Control", "no-store").body(response);
     }
 
     @GetMapping("/{sessionId}/result")
@@ -85,7 +87,7 @@ public class ExamSessionController {
             Principal principal) {
         UUID userId = UUID.fromString(principal.getName());
         dts.com.examination.api.response.ExamResultResponse response = examSessionService.getExamResult(sessionId, userId);
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok().header("Cache-Control", "no-store").body(response);
     }
 
     @GetMapping("/{sessionId}/review")
@@ -95,7 +97,7 @@ public class ExamSessionController {
             Principal principal) {
         UUID userId = UUID.fromString(principal.getName());
         dts.com.examination.api.response.ExamReviewResponse response = examSessionService.getExamSessionReview(sessionId, userId);
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok().header("Cache-Control", "no-store").body(response);
     }
     @GetMapping("/{sessionId}/progress")
     // @PreAuthorize("hasAuthority('PERM_exam_session:read')")
@@ -124,4 +126,35 @@ public class ExamSessionController {
         return ResponseEntity.ok(examSessionService.resumeSession(sessionId, userId));
     }
 
+
+    @org.springframework.web.bind.annotation.PatchMapping("/{sessionId}/questions/{questionId}/mark")
+    public ResponseEntity<dts.com.examination.api.response.SessionProgressResponse> mark(
+            @PathVariable UUID sessionId, @PathVariable UUID questionId,
+            @Valid @RequestBody dts.com.examination.api.form.SessionActionRequest request, Principal principal) {
+        return ResponseEntity.ok().header("Cache-Control", "no-store").body(
+                official.mark(sessionId, questionId, request.marked(), request.version(), UUID.fromString(principal.getName())));
+    }
+
+    @org.springframework.web.bind.annotation.PatchMapping("/{sessionId}/navigation")
+    public ResponseEntity<dts.com.examination.api.response.SessionProgressResponse> navigate(
+            @PathVariable UUID sessionId,
+            @Valid @RequestBody dts.com.examination.api.form.SessionActionRequest request, Principal principal) {
+        return ResponseEntity.ok().header("Cache-Control", "no-store").body(
+                official.navigate(sessionId, request.targetPosition(), request.version(), UUID.fromString(principal.getName())));
+    }
+
+    @PostMapping("/{sessionId}/violations")
+    public ResponseEntity<dts.com.examination.api.response.SessionProgressResponse> violation(
+            @PathVariable UUID sessionId,
+            @Valid @RequestBody dts.com.examination.api.form.SessionViolationRequest request, Principal principal) {
+        return ResponseEntity.ok().header("Cache-Control", "no-store").body(
+                official.violation(sessionId, request, UUID.fromString(principal.getName())));
+    }
+
+    @PostMapping("/{sessionId}/release-result")
+    @PreAuthorize("@examAdminAccess.can(authentication, 'exam', 'update')")
+    public ResponseEntity<Void> releaseResult(@PathVariable UUID sessionId, Principal principal) {
+        official.releaseManually(sessionId, UUID.fromString(principal.getName()));
+        return ResponseEntity.noContent().header("Cache-Control", "no-store").build();
+    }
 }

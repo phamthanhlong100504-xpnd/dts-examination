@@ -16,7 +16,6 @@ import dts.com.examination.domain.repository.ExamVersionRepository;
 import dts.com.examination.application.event.LearningResultEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -40,11 +39,13 @@ public class ExamSessionServiceImpl implements ExamSessionService {
     private final dts.com.examination.domain.repository.ExamCriteriaRepository examCriteriaRepository;
     private final dts.com.examination.domain.repository.ExamRepository examRepository;
     private final ContentBuilderClient contentBuilderClient;
-    private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final dts.com.examination.application.service.session.OfficialExamSessionService official;
+    private final dts.com.examination.application.service.session.LegacyResultOutbox legacyResultOutbox;
 
     @Override
     @Transactional
     public ExamSessionResponse startSession(StartExamSessionRequest request, UUID userId) {
+        if (official.handles(request)) return official.start(request, userId);
         // 1. Fetch Exam Version & Validate Status
         ExamVersion examVersion;
         if (request.getExamVersionId() != null) {
@@ -169,6 +170,7 @@ public class ExamSessionServiceImpl implements ExamSessionService {
     @Override
     @Transactional
     public dts.com.examination.api.response.ExamSessionDetailResponse getSessionDetail(UUID sessionId, UUID userId) {
+        if (official.handlesSession(sessionId)) return official.detail(sessionId, userId);
         ExamSession session = examSessionRepository.findById(sessionId)
                 .orElseThrow(() -> new BusinessRuleException("Exam session not found"));
 
@@ -229,6 +231,7 @@ public class ExamSessionServiceImpl implements ExamSessionService {
     @Override
     @Transactional
     public dts.com.examination.api.response.ExamPaperResponse getExamPaper(UUID sessionId, UUID userId) {
+        if (official.handlesSession(sessionId)) return official.paper(sessionId, userId);
         ExamSession session = examSessionRepository.findById(sessionId)
                 .orElseThrow(() -> new BusinessRuleException("Exam session not found"));
 
@@ -321,8 +324,9 @@ public class ExamSessionServiceImpl implements ExamSessionService {
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public dts.com.examination.api.response.ExamReviewResponse getExamSessionReview(UUID sessionId, UUID userId) {
+        if (official.handlesSession(sessionId)) return official.review(sessionId, userId);
         ExamSession session = examSessionRepository.findById(sessionId)
                 .orElseThrow(() -> new BusinessRuleException("Exam session not found"));
 
@@ -410,6 +414,7 @@ public class ExamSessionServiceImpl implements ExamSessionService {
     @Override
     @Transactional
     public dts.com.examination.api.response.SaveAnswersResponse saveAnswers(UUID sessionId, dts.com.examination.api.form.SaveAnswersRequest request, UUID userId) {
+        if (official.handlesSession(sessionId)) return official.save(sessionId, request, userId);
         ExamSession session = examSessionRepository.findById(sessionId)
                 .orElseThrow(() -> new BusinessRuleException("Exam session not found"));
 
@@ -471,6 +476,7 @@ public class ExamSessionServiceImpl implements ExamSessionService {
     @Override
     @Transactional
     public dts.com.examination.api.response.SubmitExamResponse submitExam(UUID sessionId, String idempotencyKey, UUID userId) {
+        if (official.handlesSession(sessionId)) return official.submit(sessionId, idempotencyKey, userId);
         ExamSession session = examSessionRepository.findById(sessionId)
                 .orElseThrow(() -> new BusinessRuleException("Exam session not found"));
 
@@ -560,9 +566,8 @@ public class ExamSessionServiceImpl implements ExamSessionService {
         meta.put("correctCount", correctCount);
         meta.put("failedCriticalQuestion", failedCriticalQuestion);
         session.setMetadata(meta);
-        examSessionRepository.save(session);
         
-        // --- Publish Event to Kafka ---
+        // Store the result snapshot for source-owned transactional outbox delivery.
         int durationSeconds = session.getStartedAt() != null ? 
             (int) java.time.Duration.between(session.getStartedAt(), now).getSeconds() : 0;
             
@@ -572,7 +577,7 @@ public class ExamSessionServiceImpl implements ExamSessionService {
                 .orElseThrow(() -> new BusinessRuleException("Exam rule not found"));
 
         String finalResult = "SUBMITTED";
-        if ("IMMEDIATE".equals(examRule.getResultReleaseMode())) {
+        if ("IMMEDIATE".equals(examRule.getResultReleaseMode()) || "IMMEDIATELY".equals(examRule.getResultReleaseMode())) {
             finalResult = evaluateExamResult(examVersion, totalScore, meta);
             // Result evaluates to "PASS" or "FAIL", map to PASSED/FAILED for dts-result
             if ("PASS".equals(finalResult)) finalResult = "PASSED";
@@ -580,7 +585,7 @@ public class ExamSessionServiceImpl implements ExamSessionService {
         }
 
         LearningResultEvent event = LearningResultEvent.builder()
-                .eventId(UUID.randomUUID())
+                .eventId(sessionId)
                 .eventType("LEARNING_RESULT_CREATED")
                 .eventVersion(1)
                 .occurredAt(now)
@@ -588,7 +593,7 @@ public class ExamSessionServiceImpl implements ExamSessionService {
                 .sourceType("EXAM_SESSION")
                 .sourceId(sessionId)
                 .targetType("EXAM")
-                .targetId(session.getExamVersionId())
+                .targetId(examVersion.getExamId())
                 .attemptNo(session.getAttemptNo())
                 .result("PASSED".equals(finalResult) ? "PASSED" : "FAILED".equals(finalResult) ? "FAILED" : "SUBMITTED")
                 .score(totalScore)
@@ -604,7 +609,11 @@ public class ExamSessionServiceImpl implements ExamSessionService {
                 .metadata(idempotencyKey != null ? Map.of("idempotencyKey", idempotencyKey) : Map.of())
                 .build();
                 
-        kafkaTemplate.send("learning-results", session.getUserId().toString(), event);
+        // Source stores all grading privately; only its existing immediate-release
+        // policy can deliver a legacy result. Delayed legacy policies stay closed.
+        meta.put("legacyResultReleaseMode",examRule.getResultReleaseMode());
+        legacyResultOutbox.enqueue(session,event,meta);
+        examSessionRepository.save(session);
         // ------------------------------
 
         return dts.com.examination.api.response.SubmitExamResponse.builder()
@@ -617,6 +626,7 @@ public class ExamSessionServiceImpl implements ExamSessionService {
     @Override
     @Transactional
     public dts.com.examination.api.response.ExamResultResponse getExamResult(UUID sessionId, UUID userId) {
+        if (official.handlesSession(sessionId)) return official.result(sessionId, userId);
         ExamSession session = examSessionRepository.findById(sessionId)
                 .orElseThrow(() -> new BusinessRuleException("Exam session not found"));
 
@@ -667,6 +677,7 @@ public class ExamSessionServiceImpl implements ExamSessionService {
     @Override
     @Transactional
     public dts.com.examination.api.response.SessionProgressResponse getSessionProgress(UUID sessionId, UUID userId) {
+        if (official.handlesSession(sessionId)) return official.progress(sessionId, userId);
         ExamSession session = examSessionRepository.findById(sessionId)
                 .orElseThrow(() -> new BusinessRuleException("Exam session not found"));
         if (!session.getUserId().equals(userId)) {
@@ -694,6 +705,7 @@ public class ExamSessionServiceImpl implements ExamSessionService {
     @Override
     @Transactional
     public dts.com.examination.api.response.PauseSessionResponse pauseSession(UUID sessionId, UUID userId) {
+        if (official.handlesSession(sessionId)) return official.pause(sessionId, userId);
         ExamSession session = examSessionRepository.findById(sessionId)
                 .orElseThrow(() -> new BusinessRuleException("Exam session not found"));
         if (!session.getUserId().equals(userId)) {
@@ -740,6 +752,7 @@ public class ExamSessionServiceImpl implements ExamSessionService {
     @Override
     @Transactional
     public dts.com.examination.api.response.ResumeSessionResponse resumeSession(UUID sessionId, UUID userId) {
+        if (official.handlesSession(sessionId)) return official.resume(sessionId, userId);
         ExamSession session = examSessionRepository.findById(sessionId)
                 .orElseThrow(() -> new BusinessRuleException("Exam session not found"));
         if (!session.getUserId().equals(userId)) {
@@ -790,7 +803,9 @@ public class ExamSessionServiceImpl implements ExamSessionService {
         List<dts.com.examination.api.response.SessionHistoryItemResponse> items = new ArrayList<>();
         for (ExamSession session : sessionPage.getContent()) {
             dts.com.examination.api.response.ExamResultSummary summary = null;
-            if ("SUBMITTED".equals(session.getStatus())) {
+            if (official.handlesSession(session.getId())) {
+                summary = official.historySummary(session);
+            } else if ("SUBMITTED".equals(session.getStatus())) {
                 long totalQuestions = examSessionAnswerRepository.countByExamSessionId(session.getId());
                 int correctCount = extractCorrectCount(session.getMetadata());
                 java.math.BigDecimal score = extractTotalScore(session.getMetadata());

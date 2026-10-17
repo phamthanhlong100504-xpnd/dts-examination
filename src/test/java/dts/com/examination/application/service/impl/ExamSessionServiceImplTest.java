@@ -53,6 +53,11 @@ class ExamSessionServiceImplTest {
     @Mock
     private KafkaTemplate<String, Object> kafkaTemplate;
 
+    @Mock
+    private dts.com.examination.application.service.session.OfficialExamSessionService official;
+    @Mock
+    private dts.com.examination.application.service.session.LegacyResultOutbox legacyResultOutbox;
+
     @InjectMocks
     private ExamSessionServiceImpl examSessionService;
 

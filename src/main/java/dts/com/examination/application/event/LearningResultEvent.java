@@ -25,6 +25,14 @@ public class LearningResultEvent {
     private String targetType;
     private UUID targetId;
     private Integer attemptNo;
+    private String activityType;
+    private String displayTitle;
+    private String licenseClass;
+    private Integer correctCount;
+    private Integer questionCount;
+    private Boolean resultAvailable;
+    private Boolean reviewAvailable;
+
     private String result;
     private BigDecimal score;
     private BigDecimal maxScore;

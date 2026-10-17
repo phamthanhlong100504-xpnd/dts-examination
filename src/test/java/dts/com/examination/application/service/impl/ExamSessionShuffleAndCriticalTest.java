@@ -34,8 +34,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -57,6 +56,11 @@ class ExamSessionShuffleAndCriticalTest {
     private ContentBuilderClient contentBuilderClient;
     @Mock
     private KafkaTemplate<String, Object> kafkaTemplate;
+
+    @Mock
+    private dts.com.examination.application.service.session.OfficialExamSessionService official;
+    @Mock
+    private dts.com.examination.application.service.session.LegacyResultOutbox legacyResultOutbox;
 
     @InjectMocks
     private ExamSessionServiceImpl examSessionService;
@@ -361,6 +365,7 @@ class ExamSessionShuffleAndCriticalTest {
 
         // Act
         examSessionService.submitExam(sessionId, idempotencyKey, userId);
+        assertGradeQueued(session,sessionId);
 
         // Assert
         verify(examSessionRepository).save(argThat(s ->
@@ -406,6 +411,7 @@ class ExamSessionShuffleAndCriticalTest {
 
         // Act
         examSessionService.submitExam(sessionId, idempotencyKey, userId);
+        assertGradeQueued(session,sessionId);
 
         // Assert
         verify(examSessionRepository).save(argThat(s ->
@@ -466,6 +472,7 @@ class ExamSessionShuffleAndCriticalTest {
 
         // Act
         examSessionService.submitExam(sessionId, "key", userId);
+        assertGradeQueued(session,sessionId);
 
         // Assert
         verify(examSessionRepository).save(argThat(s ->
@@ -510,6 +517,7 @@ class ExamSessionShuffleAndCriticalTest {
 
         // Act
         examSessionService.submitExam(sessionId, "key", userId);
+        assertGradeQueued(session,sessionId);
 
         // Assert
         verify(examSessionRepository).save(argThat(s ->
@@ -554,10 +562,21 @@ class ExamSessionShuffleAndCriticalTest {
 
         // Act
         examSessionService.submitExam(sessionId, "key", userId);
+        assertGradeQueued(session,sessionId);
 
         // Assert
         verify(examSessionRepository).save(argThat(s ->
                 Boolean.TRUE.equals(s.getMetadata().get("failedCriticalQuestion"))
         ));
+    }
+
+    private void assertGradeQueued(ExamSession session,UUID sessionId) {
+        verify(legacyResultOutbox).enqueue(eq(session),argThat(event ->
+                sessionId.equals(event.getEventId()) && sessionId.equals(event.getSourceId())
+                && examId.equals(event.getTargetId())
+                && session.getMetadata().get("totalScore").equals(event.getScore())
+                && session.getMetadata().get("correctCount").equals(event.getResultSnapshot().get("correctCount"))),
+                same(session.getMetadata()));
+        verifyNoInteractions(kafkaTemplate);
     }
 }
