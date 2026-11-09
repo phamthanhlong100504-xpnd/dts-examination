@@ -152,7 +152,7 @@ public class ExamSessionController {
     }
 
     @PostMapping("/{sessionId}/release-result")
-    @PreAuthorize("@examAdminAccess.can(authentication, 'exam', 'update')")
+    @PreAuthorize("@examAdminAccess.can(authentication, 'exam_session', 'release_result')")
     public ResponseEntity<Void> releaseResult(@PathVariable UUID sessionId, Principal principal) {
         official.releaseManually(sessionId, UUID.fromString(principal.getName()));
         return ResponseEntity.noContent().header("Cache-Control", "no-store").build();

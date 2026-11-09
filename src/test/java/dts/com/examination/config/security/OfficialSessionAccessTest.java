@@ -39,10 +39,12 @@ class OfficialSessionAccessTest {
             var user=auth(role,"PERM_exams:read");assertThrows(AccessDeniedException.class,()->controller.getSessionDetail(SESSION,user));
         }verifyNoInteractions(legacy,official);
     }
-    @Test void manualReleaseRequiresAdminRoleAndUpdatePermission() {
+    @Test void manualReleaseRequiresIndependentSubjectGrantNotGeneralUpdate() {
         var student=auth("ROLE_STUDENT","PERM_exams:update");assertThrows(AccessDeniedException.class,()->controller.releaseResult(SESSION,student));
         var admin=auth("ROLE_ADMIN");assertThrows(AccessDeniedException.class,()->controller.releaseResult(SESSION,admin));
-        var allowed=auth("ROLE_ADMIN","PERM_exams:update");assertEquals(204,controller.releaseResult(SESSION,allowed).getStatusCode().value());
+        var legacy=auth("ROLE_ADMIN","PERM_exams:update");assertThrows(AccessDeniedException.class,()->controller.releaseResult(SESSION,legacy));
+        var forbidden=auth("ROLE_STUDENT","PERM_official-exams:release-result");assertThrows(AccessDeniedException.class,()->controller.releaseResult(SESSION,forbidden));
+        var allowed=auth("ROLE_ADMIN","PERM_official-exams:release-result");assertEquals(204,controller.releaseResult(SESSION,allowed).getStatusCode().value());
         verify(official).releaseManually(SESSION,USER);
     }
     @Test void creatingReturns201AndRecoveryReturns200WithNoStore() {
