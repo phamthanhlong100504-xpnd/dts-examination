@@ -45,6 +45,7 @@ class ExamVersionWorkflowTest {
     private ContentBuilderClient client;
     private ExamVersionServiceImpl service;
     private OfficialExamVersionValidator validator;
+    private OfficialVersionReviewService reviews;
     private ExamQuestionSelectionService selector;
     private ExamQuestionPool pool;
     private Map<UUID, InternalQuestionDetailResponse> actualDetails;
@@ -90,7 +91,8 @@ class ExamVersionWorkflowTest {
         var catalog=new ExamMatrixPolicyCatalog(mapper);
         selector=new ExamQuestionSelectionService(catalog,new ExamStructureValidator());
         validator=new OfficialExamVersionValidator(catalog,selector,new ExamQuestionSourceReader(client),new ExamStructureValidator(),mapper);
-        service=new ExamVersionServiceImpl(versions,exams,structures,rules,criterias,sessions,validator);
+        reviews=mock(OfficialVersionReviewService.class);
+        service=new ExamVersionServiceImpl(versions,exams,structures,rules,criterias,sessions,validator,reviews);
         parent=Exam.builder().id(EXAM_ID).title("Workflow fixture configuration").build();
         List<Section> sections=new ArrayList<>(); int[] counts={8,1,1,1,9,9};
         for(int i=0;i<6;i++) sections.add(new Section("CHAPTER_"+(i+1),"Chapter "+(i+1),counts[i],1,i,List.of(byNumber.get(i+1)),0));
@@ -169,6 +171,22 @@ class ExamVersionWorkflowTest {
         when(client.getQuestionBank(BANK,"B")).thenThrow(new ExaminationException(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,"SOURCE_UNAVAILABLE","Unavailable"));
         error("SOURCE_UNAVAILABLE",()->service.create(EXAM_ID,request(ExamSelectionMode.AUTO_MATRIX,List.of())));
         verify(versions,never()).save(any());
+    }
+
+    @Test
+    void officialPublicationMustPassExactSnapshotApprovalBeforeArchivingExistingVersion() {
+        service.create(EXAM_ID,request(ExamSelectionMode.AUTO_MATRIX,List.of()));
+        var old=ExamVersion.builder().id(new UUID(0,20)).examId(EXAM_ID).status("PUBLISHED").build();
+        when(versions.findByExamIdAndStatusAndDeletedAtIsNullList(EXAM_ID,"PUBLISHED"))
+                .thenReturn(List.of(old));
+        doThrow(new ExaminationException(org.springframework.http.HttpStatus.CONFLICT,
+                "APPROVAL_REQUIRED","Approval required"))
+                .when(reviews).requireApproved(any(),anyMap());
+        error("APPROVAL_REQUIRED",()->service.publish(VERSION_ID));
+        assertEquals("PUBLISHED",old.getStatus());
+        assertEquals("DRAFT",stored.getStatus());
+        verify(versions,never()).save(old);
+        verify(exams,never()).save(any());
     }
 
     @Test

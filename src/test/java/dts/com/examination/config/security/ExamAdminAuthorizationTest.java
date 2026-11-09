@@ -141,13 +141,12 @@ class ExamAdminAuthorizationTest {
     }
 
     @Test
-    void updatePermissionGrantsUpdatePublishAndArchive() {
+    void updatePermissionCanUpdateAndArchiveButCannotPublishWithoutSpecificGrant() {
         authenticate("ROLE_ADMIN", "PERM_exams:update");
         exam().update(EXAM_ID, null);
-        version().publishExamVersion(VERSION_ID);
+        assertThrows(AccessDeniedException.class, () -> version().publishExamVersion(VERSION_ID));
         version().archiveExamVersion(VERSION_ID);
         verify(context.getBean(ExamService.class)).update(EXAM_ID, null);
-        verify(context.getBean(ExamVersionService.class)).publish(VERSION_ID);
         verify(context.getBean(ExamVersionService.class)).archive(VERSION_ID);
         verifyNoMoreInteractions(services());
     }
@@ -199,13 +198,22 @@ class ExamAdminAuthorizationTest {
     }
 
     @Test
-    void legacyPublishDoesNotGrantOtherVersionOperations() {
-        authenticate("ROLE_ADMIN", "PERM_exam_version:publish");
+    void subjectSpecificPublishPermissionDoesNotGrantEditArchiveOrReview() {
+        authenticate("ROLE_ADMIN", "PERM_official-exams:publish");
         version().publishExamVersion(VERSION_ID);
-        assertThrows(AccessDeniedException.class, () -> version().archiveExamVersion(VERSION_ID));
         assertThrows(AccessDeniedException.class, () -> version().updateExamVersion(VERSION_ID, null));
+        assertThrows(AccessDeniedException.class, () -> version().archiveExamVersion(VERSION_ID));
         verify(context.getBean(ExamVersionService.class)).publish(VERSION_ID);
         verifyNoMoreInteractions(services());
+    }
+
+    @Test
+    void legacyPublishAloneNoLongerAuthorizesOfficialPublication() {
+        authenticate("ROLE_ADMIN", "PERM_exam_version:publish");
+        assertThrows(AccessDeniedException.class, () -> version().publishExamVersion(VERSION_ID));
+        assertThrows(AccessDeniedException.class, () -> version().archiveExamVersion(VERSION_ID));
+        assertThrows(AccessDeniedException.class, () -> version().updateExamVersion(VERSION_ID, null));
+        verifyNoInteractions(services());
     }
 
     @Test
@@ -231,7 +239,9 @@ class ExamAdminAuthorizationTest {
         assertFalse(access.can(admin, "users", "read"));
         assertFalse(access.can(admin, "exam", "unknown"));
         assertFalse(access.can(admin, "exam_rule", "publish"));
-        assertTrue(access.can(admin, "exam_version", "publish"));
+        assertFalse(access.can(admin, "exam_version", "publish"));
+        Authentication publisher = authenticate("ROLE_ADMIN", "PERM_official-exams:publish");
+        assertTrue(access.can(publisher, "exam_version", "publish"));
         verifyNoInteractions(services());
     }
 

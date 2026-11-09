@@ -30,6 +30,7 @@ public class ExamVersionServiceImpl implements ExamVersionService {
     private final ExamCriteriaRepository criterias;
     private final ExamSessionRepository sessions;
     private final OfficialExamVersionValidator validator;
+    private final dts.com.examination.application.service.OfficialVersionReviewService review;
 
     @Override
     @Transactional
@@ -66,6 +67,7 @@ public class ExamVersionServiceImpl implements ExamVersionService {
     public ExamVersionResponse update(UUID versionId, UpdateExamVersionRequest request) {
         ExamVersion current = lockVersion(versionId);
         requireDraftWithoutHistory(current);
+        if ("OFFICIAL".equals(current.getExamType())) review.requireEditable(current.getId());
         ExamVersion candidate = copyVersion(current);
         if (request.title() != null) candidate.setTitle(request.title());
         if (request.examType() != null) candidate.setExamType(request.examType());
@@ -85,6 +87,7 @@ public class ExamVersionServiceImpl implements ExamVersionService {
                 request.selectionMode() != null ? request.selectionMode() : old == null ? null : old.selectionMode(),
                 request.manualQuestionIds() != null ? request.manualQuestionIds() : old == null ? List.of() : old.manualQuestionIds());
         Map<String, Object> config = validate(candidate, profile, false);
+        if ("OFFICIAL".equals(current.getExamType())) review.recordEditor(current.getId());
         // Only mutate the managed row after merged fields and the real source have passed validation.
         apply(current, candidate);
         current.setConfigs(config);
@@ -96,6 +99,7 @@ public class ExamVersionServiceImpl implements ExamVersionService {
     public void delete(UUID versionId) {
         ExamVersion version = lockVersion(versionId);
         requireDraftWithoutHistory(version);
+        if ("OFFICIAL".equals(version.getExamType())) review.requireEditable(version.getId());
         version.setDeletedAt(Instant.now());
         versions.save(version);
     }
@@ -111,6 +115,8 @@ public class ExamVersionServiceImpl implements ExamVersionService {
         }
         ExamVersion candidate = copyVersion(version);
         Map<String, Object> config = validate(candidate, validator.profile(version.getConfigs()), true);
+        // Approval is tied to this exact verified snapshot. Never archive the old version first.
+        review.requireApproved(version, config);
         // Source/config validation completes before replacing any current published version.
         List<ExamVersion> previous = versions.findByExamIdAndStatusAndDeletedAtIsNullList(version.getExamId(), "PUBLISHED");
         for (ExamVersion old : previous) {
