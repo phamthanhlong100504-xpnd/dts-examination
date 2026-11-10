@@ -4,6 +4,7 @@ import dts.com.examination.api.controller.AdminOfficialExamSessionController;
 import dts.com.examination.api.controller.AdminOfficialExamVersionPreviewController;
 import dts.com.examination.application.service.AdminOfficialSessions;
 import dts.com.examination.application.service.AdminOfficialVersionPreview;
+import dts.com.examination.application.service.session.OfficialExamSessionService;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -66,5 +67,6 @@ class AdminOfficialMonitoringAccessTest {
     static class Config {
         @Bean AdminOfficialSessions sessions() { return mock(AdminOfficialSessions.class); }
         @Bean AdminOfficialVersionPreview preview() { return mock(AdminOfficialVersionPreview.class); }
+        @Bean OfficialExamSessionService official() { return mock(OfficialExamSessionService.class); }
     }
 }
