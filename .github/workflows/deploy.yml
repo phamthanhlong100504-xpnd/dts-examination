@@ -54,6 +54,16 @@ jobs:
           docker push $IMAGE:latest
           docker push $IMAGE:${{ github.sha }}
 
+      - name: Prepare VPS Directory
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          password: ${{ secrets.VPS_PASSWORD }}
+          script: |
+            mkdir -p ${{ env.DEPLOY_DIR }}
+            docker network create dts-network || true
+
       - uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -73,4 +83,7 @@ jobs:
             mv -f docker-compose.prod.yml docker-compose.yml
             docker compose pull
             docker compose up -d
+            sleep 5
+            docker compose ps -a
+            docker logs examination --tail 40
             docker image prune -a -f
